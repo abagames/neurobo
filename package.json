@@ -1,0 +1,24 @@
+{
+  "name": "neurobo",
+  "version": "1.0.0",
+  "description": "Neuroevolution robots playground",
+  "author": "ABA",
+  "license": "MIT",
+  "scripts": {
+    "wds": "webpack-dev-server --inline",
+    "build": "webpack",
+    "watch": "webpack --watch"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.52",
+    "awesome-typescript-loader": "^3.0.4-rc.0",
+    "glob": "^7.1.1",
+    "typescript": "^2.1.6",
+    "webpack": "^2.2.1",
+    "webpack-dev-server": "^2.3.0"
+  },
+  "dependencies": {
+    "lodash": "^4.17.4",
+    "p5": "^0.5.7"
+  }
+}
