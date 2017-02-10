@@ -313,9 +313,18 @@ export class JumpOnWall extends Module {
   }
 }
 
-export class ReflectByWall extends Module {
-  constructor(actor: g.Actor) {
+export class CollideToWall extends Module {
+  velRatio = 1;
+  isDestroying = false;
+
+  constructor(actor: g.Actor, options: { velRatio?: number, isDestorying?: boolean } = {}) {
     super(actor);
+    if (options.velRatio != null) {
+      this.velRatio = options.velRatio;
+    }
+    if (options.isDestorying != null) {
+      this.isDestroying = options.isDestorying;
+    }
   }
 
   update() {
@@ -336,7 +345,9 @@ export class ReflectByWall extends Module {
     if (collisionInfo.angle === 1 || collisionInfo.angle === 3) {
       this.actor.vel.y *= -1;
     }
-    collisionInfo.wall.destroy();
+    if (this.isDestroying) {
+      collisionInfo.wall.destroy();
+    }
   }
 }
 

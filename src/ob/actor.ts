@@ -88,7 +88,7 @@ export class Actor {
     } else {
       let a = this.angle;
       if (a < 0) {
-        a = Math.PI * 2 - Math.abs(a % (Math.PI * 2));
+        a = Math.PI * 2 + a % (Math.PI * 2);
       }
       const ri = Math.round(a / (Math.PI * 2 / rotationNum)) % rotationNum;
       pag.draw(this.context, this.pixels, x, y, ri);
@@ -128,9 +128,12 @@ export class Player extends Actor {
   update() {
     this.emitParticles(`t_${this.type}`);
     super.update();
-    if (this.testCollision('enemy').length > 0 ||
-      this.testCollision('bullet').length > 0) {
+    const bs = this.testCollision('bullet');
+    if (bs.length > 0) {
       this.destroy();
+      _.forEach(bs, (b: Bullet) => {
+        b.destroy();
+      });
     }
   }
 
@@ -182,9 +185,12 @@ export class Shot extends Actor {
   update() {
     if (this.ticks === 0) {
       this.emitParticles(`m_${this.type}`);
-      sss.play(`l_${this.type}`);
+      //sss.play(`l_${this.type}`);
     }
     this.emitParticles(`t_${this.type}`);
+    if (this.testCollision('wall').length > 0) {
+      this.remove();
+    }
     super.update();
   }
 }
@@ -202,9 +208,12 @@ export class Bullet extends Actor {
   update() {
     if (this.ticks === 0) {
       this.emitParticles(`m_${this.type}`);
-      sss.play(`l_${this.type}`);
+      //sss.play(`l_${this.type}`);
     }
     this.emitParticles(`t_${this.type}`);
+    if (this.testCollision('wall').length > 0) {
+      this.remove();
+    }
     super.update();
   }
 }

@@ -7,9 +7,10 @@ import * as ir from 'ir';
 import { Actor, rotationNum } from './ob/actor';
 import Random from './ob/random';
 import * as ui from './ob/ui';
+import * as text from './ob/text';
 import * as debug from './ob/debug';
 import * as util from './ob/util';
-export { Random, ui, debug };
+export { Random, ui, text, debug };
 export * from './ob/util';
 export * from './ob/actor';
 export * from './ob/modules';
@@ -20,8 +21,10 @@ export let p: p5;
 export let games: Game[] = [];
 export let isReplaying = false;
 let seedRandom: Random;
+let updateFunc: Function;
 
-export function init() {
+export function init(_updateFunc: Function) {
+  updateFunc = _updateFunc;
   sss.init();
   pag.setDefaultOptions({
     isMirrorY: true,
@@ -34,6 +37,7 @@ export function init() {
   });
   limitColors();
   ui.init();
+  text.init();
   seedRandom = new Random();
   new p5((_p: p5) => {
     p = _p;
@@ -90,28 +94,35 @@ export function update() {
   _.forEach(games, g => {
     g.update();
   });
+  updateFunc();
 }
 
 export class Game {
   p: p5;
   actorPool = new ActorPool();
   screen: Screen;
+  score = 0;
   ticks = 0;
   random: Random;
   isDebugEnabled = false;
   modules = [];
   initialStatus = { r: 0 };
+  networkPlayer;
+  networkEnemy;
 
-  constructor(public parentId: string) {
+  constructor() {
     this.random = new Random();
     this.setup = this.setup.bind(this);
     new p5((_p: p5) => {
       this.p = _p;
       _p.setup = this.setup;
     });
-    if (parentId != null) {
-      games.push(this);
-    }
+    games.push(this);
+  }
+
+  setNetwork(networkPlayer, networkEnemy) {
+    this.networkPlayer = networkPlayer;
+    this.networkEnemy = networkEnemy;
   }
 
   enableDebug(_onSeedChangedFunc = null) {
@@ -132,7 +143,7 @@ export class Game {
   endGame() {
     //this.ticks = 0;
     //sss.stopBgm();
-    //ir.recordInitialStatus(this.initialStatus);    
+    //ir.recordInitialStatus(this.initialStatus);
   }
 
   clearModules() {
@@ -148,13 +159,9 @@ export class Game {
   }
 
   setup() {
-    if (this.parentId == null) {
-      this.screen = new Screen(null, p);
-      return;
-    }
     const canvas = this.p.createCanvas(128, 128);
-    canvas.parent(this.parentId);
-    canvas.canvas.setAttribute('style', null);
+    //canvas.parent(this.parentId);
+    //canvas.canvas.setAttribute('style', null);
     canvas.canvas.setAttribute('class', 'pixelated');
     this.screen = new Screen(canvas.canvas, this.p);
     this.p.noStroke();
@@ -170,6 +177,7 @@ export class Game {
     this.clearModules();
     this.actorPool.clear();
     this.ticks = 0;
+    this.score = 0;
   }
 
   update() {
@@ -185,6 +193,7 @@ export class Game {
     ppe.update();
     this.actorPool.update();
     //postUpdateFunc();
+    text.draw(this.screen.context, `${this.score}`, 1, 1, text.Align.left);
     this.ticks++;
   }
 }
@@ -273,7 +282,6 @@ export class Screen {
   }
 
   clear() {
-    const p = this.p;
-    p.background(0);
+    this.p.background(0);
   }
 }
