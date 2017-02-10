@@ -12,7 +12,7 @@ let targetGame: g.Game;
 let prevCodes: any[];
 let addActorsCode: string;
 let p: p5;
-const sensorNum = 9;
+const sensorNum = 7;
 let population = 8;
 let ticks = 0;
 
@@ -21,7 +21,7 @@ function init() {
   p = g.p;
   ne = new Neuroevolution({
     population,
-    network: [sensorNum * 2, [sensorNum * 2], 7]
+    network: [sensorNum * 3, [sensorNum], 7]
   });
   _.times(population, i => {
     new g.Game();
@@ -67,8 +67,8 @@ class PRobo extends g.Player {
 
   constructor(game: g.Game) {
     super(game);
-    this.pos.set(64, 128 - 16);
-    this.angle = -p.HALF_PI;
+    this.pos.set(p.random(32, 128 - 32), 128 - 16);
+    this.angle = -p.HALF_PI / 2 - p.random(0, p.HALF_PI);
     this.network = game.networkPlayer;
     this.collision.set(8, 8);
     new g.CollideToWall(this, { velRatio: 0 });
@@ -83,7 +83,7 @@ class PRobo extends g.Player {
   }
 
   destroy() {
-    this.game.score--;
+    this.game.score -= 1;
   }
 }
 
@@ -93,8 +93,8 @@ class ERobo extends g.Enemy {
 
   constructor(game: g.Game) {
     super(game);
-    this.pos.set(64, 16);
-    this.angle = p.HALF_PI;
+    this.pos.set(p.random(32, 128 - 32), 16);
+    this.angle = p.HALF_PI / 2 + p.random(0, p.HALF_PI);
     this.network = game.networkEnemy;
     this.collision.set(8, 8);
     new g.CollideToWall(this, { velRatio: 0 });
@@ -109,7 +109,7 @@ class ERobo extends g.Enemy {
   }
 
   destroy() {
-    this.game.score++;
+    this.game.score += 1;
   }
 }
 
@@ -156,23 +156,26 @@ function sense(robo, isPlayer) {
       new SAT.Vector(range, 0).rotate(sa - aw / 2),
       new SAT.Vector(range, 0).rotate(sa + aw / 2)]
     );
-    let nd = 256;
-    let na;
     const types = isPlayer ? ['wall', 'erobo', 'bullet'] : ['wall', 'probo', 'shot'];
-    _.forEach(robo.game.actorPool.actors, (a: any) => {
-      if (a === this || !a.hasOwnProperty('polygon') || _.indexOf(types, a.type) < 0) {
-        return;
-      }
-      if (SAT.testPolygonPolygon(sensor, a.polygon)) {
-        const d = robo.pos.dist(a.pos);
-        if (d < nd) {
-          nd = d;
-          na = a;
+    const result = _.map(types, t => {
+      let nd = range;
+      let na;
+      _.forEach(robo.game.actorPool.actors, (a: any) => {
+        if (a === this || !a.hasOwnProperty('polygon') || a.type !== t) {
+          return;
         }
-      }
+        if (SAT.testPolygonPolygon(sensor, a.polygon)) {
+          const d = robo.pos.dist(a.pos);
+          if (d < nd) {
+            nd = d;
+            na = a;
+          }
+        }
+      });
+      return na == null ? 1 : nd / 256;
     });
     sa += aw;
-    return na == null ? [1, 1] : [_.indexOf(types, na.type) / types.length, nd / 256];
+    return result;
   }));
 }
 
@@ -182,6 +185,7 @@ class Shot extends g.Shot {
   constructor(g: g.Game) {
     super(g);
     this.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
+    this.collision.set(4, 4);
   }
 
   update() {
@@ -196,6 +200,7 @@ class Bullet extends g.Bullet {
   constructor(g: g.Game) {
     super(g);
     this.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
+    this.collision.set(4, 4);
   }
 
   update() {

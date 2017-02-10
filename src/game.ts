@@ -116,6 +116,7 @@ export class Game {
     new p5((_p: p5) => {
       this.p = _p;
       _p.setup = this.setup;
+      p.createCanvas(0, 0);
     });
     games.push(this);
   }
