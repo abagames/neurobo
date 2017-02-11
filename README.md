@@ -7,4 +7,4 @@ Neuroevolution robots playground
 - [x] Add an angle to a sensor
 - [x] Use enemyNetwork for learning
 - [x] Do one action per a frame
-- [ ] Use DQN
+- [x] Use DQN

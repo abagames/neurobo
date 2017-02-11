@@ -3,6 +3,7 @@ import * as SAT from 'sat';
 import * as g from './game';
 declare const require: any;
 const Neuroevolution = require('Neuroevolution');
+const RL = require('rl');
 
 window.onload = init;
 
@@ -12,27 +13,32 @@ let targetGame: g.Game;
 let prevCodes: any[];
 let addActorsCode: string;
 let p: p5;
-let population = 16;
+let gameCount = 4;
 const sensorNum = 7;
+let sensorDataCount = 1;
+const sensorType = 3;
 const actionNum = 7;
 let ticks = 0;
+let isUsingDqn = true;
 
 function init() {
   g.init(update);
   p = g.p;
   ne = new Neuroevolution({
-    population,
-    network: [sensorNum * 2 * 3, [actionNum * 2], actionNum]
+    population: gameCount * 2,
+    network: [sensorNum * sensorDataCount * sensorType,
+    [actionNum * 2, actionNum * 2],
+      actionNum]
   });
-  _.times(population / 2, i => {
+  _.times(gameCount, i => {
     new g.Game();
   });
-  nextGen();
+  nextGen(true);
 }
 
 function update() {
   ticks++;
-  if (ticks > 300) {
+  if (ticks > 600) {
     _.forEach(g.games, g => {
       ne.networkScore(g.networkPlayer, g.score);
       ne.networkScore(g.networkEnemy, -g.score);
@@ -41,11 +47,27 @@ function update() {
   }
 }
 
-function nextGen() {
+function nextGen(isFirst = false) {
+  let minScore = 99999, maxScore = -99999;
+  let minGame: g.Game, maxGame: g.Game;
   const networks = ne.nextGeneration();
-  _.times(population / 2, i => {
-    g.games[i].setNetwork(networks[i], networks[i + population / 2]);
+  _.times(gameCount, i => {
+    const game = g.games[i];
+    game.setNetwork(networks[i], networks[i + gameCount]);
+    if (game.score < minScore) {
+      minScore = game.score;
+      minGame = game;
+    }
+    if (game.score > maxScore) {
+      maxScore = game.score;
+      maxGame = game;
+    }
   });
+  let nextPlayerDqn, nextEnemyDqn;
+  if (!isFirst) {
+    nextPlayerDqn = (<any>maxGame.actorPool.get('probo')[0]).agent.toJSON();
+    nextEnemyDqn = (<any>minGame.actorPool.get('erobo')[0]).agent.toJSON();
+  }
   g.beginGame();
   _.forEach(g.games, g => {
     _.times(16, i => {
@@ -57,30 +79,33 @@ function nextGen() {
         new Wall(g, p.createVector(128 - 4, v));
       }
     });
-    new PRobo(g);
-    new ERobo(g);
+    const pr = new PRobo(g);
+    const er = new ERobo(g);
+    if (!isFirst) {
+      pr.agent.fromJSON(nextPlayerDqn);
+      er.agent.fromJSON(nextEnemyDqn);
+    }
   });
   ticks = 0;
 }
 
 class PRobo extends g.Player {
-  polygon;
+  polygon: SAT.Polygon;
   network;
+  agent;
+  prevScore = 0;
 
   constructor(game: g.Game) {
     super(game);
     this.pos.set(p.random(32, 128 - 32), 128 - 16);
     this.angle = -p.HALF_PI / 2 - p.random(0, p.HALF_PI);
-    this.network = game.networkPlayer;
-    this.collision.set(8, 8);
-    new g.CollideToWall(this, { velRatio: 0 });
-    this.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
     this.type = 'probo';
+    this.network = game.networkPlayer;
+    initRobo(this);
   }
 
   update() {
     updateRobo(this, true);
-    this.polygon.setOffset(new SAT.Vector(this.pos.x - 4, this.pos.y - 4));
     super.update();
   }
 
@@ -92,21 +117,20 @@ class PRobo extends g.Player {
 class ERobo extends g.Enemy {
   polygon: SAT.Polygon;
   network;
+  agent;
+  prevScore = 0;
 
   constructor(game: g.Game) {
     super(game);
     this.pos.set(p.random(32, 128 - 32), 16);
     this.angle = p.HALF_PI / 2 + p.random(0, p.HALF_PI);
-    this.network = game.networkEnemy;
-    this.collision.set(8, 8);
-    new g.CollideToWall(this, { velRatio: 0 });
-    this.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
     this.type = 'erobo';
+    this.network = game.networkEnemy;
+    initRobo(this);
   }
 
   update() {
     updateRobo(this, false);
-    this.polygon.setOffset(new SAT.Vector(this.pos.x - 4, this.pos.y - 4));
     super.update();
   }
 
@@ -115,16 +139,30 @@ class ERobo extends g.Enemy {
   }
 }
 
+function initRobo(robo) {
+  new g.CollideToWall(robo, { velRatio: 0 });
+  robo.collision.set(8, 8);
+  robo.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
+  robo.agent = new RL.DQNAgent({
+    getNumStates: () => sensorNum * sensorDataCount * sensorType,
+    getMaxNumActions: () => actionNum
+  }, {});
+}
+
 function updateRobo(robo, isPlayer) {
-  const acts = robo.network.compute(sense(robo, isPlayer));
   robo.speed = 0;
-  let maxAct = 0;
   let act = 0;
-  for (let i = 0; i < acts.length; i++) {
-    const a = acts[i];
-    if (a > maxAct) {
-      act = i;
-      maxAct = a;
+  if (isUsingDqn) {
+    act = robo.agent.act(sense(robo, isPlayer));
+  } else {
+    const acts = robo.network.compute(sense(robo, isPlayer));
+    let maxAct = 0;
+    for (let i = 0; i < acts.length; i++) {
+      const a = acts[i];
+      if (a > maxAct) {
+        act = i;
+        maxAct = a;
+      }
     }
   }
   switch (act) {
@@ -159,6 +197,15 @@ function updateRobo(robo, isPlayer) {
       }
       break;
   }
+  robo.polygon.setOffset(new SAT.Vector(robo.pos.x - 4, robo.pos.y - 4));
+  let reward = robo.game.score - robo.prevScore;
+  if (!isPlayer) {
+    reward *= -1;
+  }
+  if (isUsingDqn) {
+    robo.agent.learn(reward);
+  }
+  robo.prevScore = robo.game.score;
 }
 
 function sense(robo, isPlayer) {
@@ -188,7 +235,12 @@ function sense(robo, isPlayer) {
           }
         }
       });
-      return na == null ? [0, 0] : [1 - nd / range, Math.abs(g.wrap(sa - na.angle, -p.PI, p.PI)) / p.PI];
+      if (sensorDataCount === 2) {
+        return na == null ? [0, 0] :
+          [1 - nd / range, Math.abs(g.wrap(sa - na.angle, -p.PI, p.PI)) / p.PI];
+      } else {
+        return na == null ? [0] : [1 - nd / range];
+      }
     }));
   }));
 }
