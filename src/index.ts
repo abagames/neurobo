@@ -12,8 +12,9 @@ let targetGame: g.Game;
 let prevCodes: any[];
 let addActorsCode: string;
 let p: p5;
+let population = 16;
 const sensorNum = 7;
-let population = 8;
+const actionNum = 7;
 let ticks = 0;
 
 function init() {
@@ -21,9 +22,9 @@ function init() {
   p = g.p;
   ne = new Neuroevolution({
     population,
-    network: [sensorNum * 3, [sensorNum], 7]
+    network: [sensorNum * 2 * 3, [actionNum * 2], actionNum]
   });
-  _.times(population, i => {
+  _.times(population / 2, i => {
     new g.Game();
   });
   nextGen();
@@ -34,6 +35,7 @@ function update() {
   if (ticks > 300) {
     _.forEach(g.games, g => {
       ne.networkScore(g.networkPlayer, g.score);
+      ne.networkScore(g.networkEnemy, -g.score);
     });
     nextGen();
   }
@@ -41,8 +43,8 @@ function update() {
 
 function nextGen() {
   const networks = ne.nextGeneration();
-  _.times(networks.length, i => {
-    g.games[i].setNetwork(networks[i], networks[Math.floor(p.random(0, networks.length))]);
+  _.times(population / 2, i => {
+    g.games[i].setNetwork(networks[i], networks[i + population / 2]);
   });
   g.beginGame();
   _.forEach(g.games, g => {
@@ -116,48 +118,62 @@ class ERobo extends g.Enemy {
 function updateRobo(robo, isPlayer) {
   const acts = robo.network.compute(sense(robo, isPlayer));
   robo.speed = 0;
-  if (acts[0] > 0.5) {
-    robo.angle += 0.05;
-  }
-  if (acts[1] > 0.5) {
-    robo.angle -= 0.05;
-  }
-  if (acts[2] > 0.5) {
-    robo.speed = 1;
-  }
-  if (acts[3] > 0.5) {
-    robo.speed = -1;
-  }
-  if (acts[4] > 0.5) {
-    robo.pos.x += Math.sin(robo.angle);
-    robo.pos.y -= Math.cos(robo.angle);
-  }
-  if (acts[5] > 0.5) {
-    robo.pos.x -= Math.sin(robo.angle);
-    robo.pos.y += Math.cos(robo.angle);
-  }
-  const type = isPlayer ? 'shot' : 'bullet';
-  if (acts[6] > 0.5 && robo.game.actorPool.get(type).length < 3) {
-    if (isPlayer) {
-      new Shot(robo);
-    } else {
-      new Bullet(robo);
+  let maxAct = 0;
+  let act = 0;
+  for (let i = 0; i < acts.length; i++) {
+    const a = acts[i];
+    if (a > maxAct) {
+      act = i;
+      maxAct = a;
     }
+  }
+  switch (act) {
+    case 0:
+      robo.angle += 0.05;
+      break;
+    case 1:
+      robo.angle -= 0.05;
+      break;
+    case 2:
+      robo.speed = 1;
+      break;
+    case 3:
+      robo.speed = -1;
+      break;
+    case 4:
+      robo.pos.x += Math.sin(robo.angle);
+      robo.pos.y -= Math.cos(robo.angle);
+      break;
+    case 5:
+      robo.pos.x -= Math.sin(robo.angle);
+      robo.pos.y += Math.cos(robo.angle);
+      break;
+    case 6:
+      const type = isPlayer ? 'shot' : 'bullet';
+      if (robo.game.actorPool.get(type).length < 3) {
+        if (isPlayer) {
+          new Shot(robo);
+        } else {
+          new Bullet(robo);
+        }
+      }
+      break;
   }
 }
 
 function sense(robo, isPlayer) {
-  let sa = robo.angle - p.HALF_PI;
   let aw = p.PI / (sensorNum - 1);
+  let sa = robo.angle - p.HALF_PI - aw;
   const range = 128;
   return _.flatten(_.times(sensorNum, i => {
+    sa += aw;
     const sensor = new SAT.Polygon(new SAT.Vector(robo.pos.x, robo.pos.y),
       [new SAT.Vector(),
       new SAT.Vector(range, 0).rotate(sa - aw / 2),
       new SAT.Vector(range, 0).rotate(sa + aw / 2)]
     );
     const types = isPlayer ? ['wall', 'erobo', 'bullet'] : ['wall', 'probo', 'shot'];
-    const result = _.map(types, t => {
+    return _.flatten(_.map(types, t => {
       let nd = range;
       let na;
       _.forEach(robo.game.actorPool.actors, (a: any) => {
@@ -172,10 +188,8 @@ function sense(robo, isPlayer) {
           }
         }
       });
-      return na == null ? 1 : nd / 256;
-    });
-    sa += aw;
-    return result;
+      return na == null ? [0, 0] : [1 - nd / range, Math.abs(g.wrap(sa - na.angle, -p.PI, p.PI)) / p.PI];
+    }));
   }));
 }
 
