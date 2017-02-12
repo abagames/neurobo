@@ -1,10 +1,12 @@
-neurobo
+neurobo ([Demo](https://abagames.github.io/neurobo/index.html))
 ======================
-Neuroevolution robots playground
+[DQN](http://cs.stanford.edu/people/karpathy/reinforcejs/puckworld.html) agent robots playground.
 
-# ToDos
+![screenshot](https://abagames.github.io/neurobo/screenshot.gif)
 
-- [x] Add an angle to a sensor
-- [x] Use enemyNetwork for learning
-- [x] Do one action per a frame
-- [x] Use DQN
+### Libraries
+
+[REINFORCEjs](http://cs.stanford.edu/people/karpathy/reinforcejs/) /
+[pixel-art-gen](https://github.com/abagames/pixel-art-gen) /
+[p5.js](https://p5js.org/) /
+[lodash](https://lodash.com/)
