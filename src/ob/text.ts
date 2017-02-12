@@ -1,5 +1,6 @@
 import * as _ from 'lodash';
 import * as pag from 'pag';
+import * as g from '../game';
 
 let dotPatterns;
 let charToIndex;
@@ -63,6 +64,9 @@ export enum Align {
 
 export function draw(context: CanvasRenderingContext2D,
   str: string, x: number, y: number, align: Align = null) {
+  if (!g.hasScreen) {
+    return;
+  }
   context.fillStyle = 'white';
   if (align === Align.left) {
   } else if (align === Align.right) {

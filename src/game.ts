@@ -20,8 +20,10 @@ export const p5 = require('p5');
 export let p: p5;
 export let games: Game[] = [];
 export let isReplaying = false;
+export let hasScreen = true;
 let seedRandom: Random;
 let updateFunc: Function;
+let updateCount = 1;
 
 export function init(_updateFunc: Function) {
   updateFunc = _updateFunc;
@@ -52,6 +54,10 @@ function limitColors() {
   ppe.setOptions({
     isLimitingColors: true
   });
+}
+
+export function setUpdateCount(c: number) {
+  updateCount = c;
 }
 
 export function beginGame() {
@@ -91,10 +97,13 @@ export function update() {
     ui.update();
     //ir.recordEvents(ui.getReplayEvents());
   }
-  _.forEach(games, g => {
-    g.update();
+  _.times(updateCount, i => {
+    hasScreen = i >= updateCount - 1;
+    _.forEach(games, g => {
+      g.update();
+    });
+    updateFunc();
   });
-  updateFunc();
 }
 
 export class Game {
@@ -110,7 +119,7 @@ export class Game {
   networkPlayer;
   networkEnemy;
 
-  constructor(public updateFunc: Function = null) {
+  constructor() {
     this.random = new Random();
     this.setup = this.setup.bind(this);
     new p5((_p: p5) => {
@@ -182,11 +191,19 @@ export class Game {
   }
 
   update() {
+    if (!hasScreen) {
+      _.forEach(this.modules, m => {
+        if (m.isEnabled) {
+          m.update();
+        }
+      });
+      this.actorPool.updateLowerZero();
+      this.actorPool.update();
+      this.ticks++;
+      return;
+    }
     this.screen.clear();
     sss.update();
-    if (this.updateFunc != null) {
-      updateFunc(this);
-    }
     _.forEach(this.modules, m => {
       if (m.isEnabled) {
         m.update();

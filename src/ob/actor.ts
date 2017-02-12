@@ -41,7 +41,7 @@ export class Actor {
     this.pos.add(this.vel);
     this.pos.x += Math.cos(this.angle) * this.speed;
     this.pos.y += Math.sin(this.angle) * this.speed;
-    if (this.pixels != null) {
+    if (g.hasScreen && this.pixels != null) {
       this.drawPixels();
     }
     _.forEach(this.modules, m => {

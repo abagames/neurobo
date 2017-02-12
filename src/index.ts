@@ -23,6 +23,7 @@ const isUsingDqn = true;
 const isShowingSensor = true;
 const isShowingReward = true;
 const isCloningMaxScoreDqn = false;
+let generationCount = 0;
 
 function init() {
   g.init(update);
@@ -105,6 +106,15 @@ function nextGen(isFirst = false) {
     gi++;
   });
   ticks = 0;
+  generationCount++;
+  let genText = `Generation: ${generationCount} `;
+  if (generationCount % 8 === 1) {
+    g.setUpdateCount(1);
+  } else {
+    g.setUpdateCount(32);
+    genText += 'skipping';
+  }
+  document.getElementById('gen_text').textContent = genText;
 }
 
 class PRobo extends g.Player {
@@ -268,7 +278,7 @@ function sense(robo: g.Actor, isPlayer) {
           }
         }
       });
-      if (isShowingSensor && isPlayer && nd < range) {
+      if (g.hasScreen && isShowingSensor && isPlayer && nd < range) {
         const p = robo.game.p;
         p.stroke(['#88f', '#ff8', '#f88'][ti]);
         p.line(Math.cos(sa) * nd + robo.pos.x, Math.sin(sa) * nd + robo.pos.y,
