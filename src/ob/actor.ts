@@ -73,7 +73,7 @@ export class Actor {
   }
 
   emitParticles(patternName: string, options: ppe.EmitOptions = {}) {
-    (<any>ppe.emit)(patternName, this.pos.x, this.pos.y, this.angle, options);
+    //(<any>ppe.emit)(patternName, this.pos.x, this.pos.y, this.angle, options);
   }
 
   drawPixels(x: number = null, y: number = null) {
