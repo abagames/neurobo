@@ -96,8 +96,10 @@ __export(__webpack_require__(6));
 exports.p5 = __webpack_require__(14);
 exports.games = [];
 exports.isReplaying = false;
+exports.hasScreen = true;
 var seedRandom;
 var updateFunc;
+var updateCount = 1;
 function init(_updateFunc) {
     updateFunc = _updateFunc;
     sss.init();
@@ -128,6 +130,10 @@ function limitColors() {
         isLimitingColors: true
     });
 }
+function setUpdateCount(c) {
+    updateCount = c;
+}
+exports.setUpdateCount = setUpdateCount;
 function beginGame() {
     clearGameStatus();
     var seed = seedRandom.getInt(9999999);
@@ -164,17 +170,18 @@ function update() {
     else {
         ui.update();
     }
-    _.forEach(exports.games, function (g) {
-        g.update();
+    _.times(updateCount, function (i) {
+        exports.hasScreen = i >= updateCount - 1;
+        _.forEach(exports.games, function (g) {
+            g.update();
+        });
+        updateFunc();
     });
-    updateFunc();
 }
 exports.update = update;
 var Game = (function () {
-    function Game(updateFunc) {
-        if (updateFunc === void 0) { updateFunc = null; }
+    function Game() {
         var _this = this;
-        this.updateFunc = updateFunc;
         this.actorPool = new ActorPool();
         this.score = 0;
         this.ticks = 0;
@@ -243,11 +250,19 @@ var Game = (function () {
         this.score = 0;
     };
     Game.prototype.update = function () {
+        if (!exports.hasScreen) {
+            _.forEach(this.modules, function (m) {
+                if (m.isEnabled) {
+                    m.update();
+                }
+            });
+            this.actorPool.updateLowerZero();
+            this.actorPool.update();
+            this.ticks++;
+            return;
+        }
         this.screen.clear();
         sss.update();
-        if (this.updateFunc != null) {
-            updateFunc(this);
-        }
         _.forEach(this.modules, function (m) {
             if (m.isEnabled) {
                 m.update();
@@ -19103,7 +19118,7 @@ var Actor = (function () {
         this.pos.add(this.vel);
         this.pos.x += Math.cos(this.angle) * this.speed;
         this.pos.y += Math.sin(this.angle) * this.speed;
-        if (this.pixels != null) {
+        if (g.hasScreen && this.pixels != null) {
             this.drawPixels();
         }
         _.forEach(this.modules, function (m) {
@@ -20033,6 +20048,7 @@ exports.default = Random;
 
 "use strict";
 
+var g = __webpack_require__(0);
 var dotPatterns;
 var charToIndex;
 function init() {
@@ -20098,6 +20114,9 @@ var Align;
 })(Align = exports.Align || (exports.Align = {}));
 function draw(context, str, x, y, align) {
     if (align === void 0) { align = null; }
+    if (!g.hasScreen) {
+        return;
+    }
     context.fillStyle = 'white';
     if (align === Align.left) {
     }
@@ -21918,6 +21937,7 @@ var isUsingDqn = true;
 var isShowingSensor = true;
 var isShowingReward = true;
 var isCloningMaxScoreDqn = false;
+var generationCount = 0;
 function init() {
     g.init(update);
     p = g.p;
@@ -22001,6 +22021,16 @@ function nextGen(isFirst) {
         gi++;
     });
     ticks = 0;
+    generationCount++;
+    var genText = "Generation: " + generationCount + " ";
+    if (generationCount % 8 === 1) {
+        g.setUpdateCount(1);
+    }
+    else {
+        g.setUpdateCount(32);
+        genText += 'skipping';
+    }
+    document.getElementById('gen_text').textContent = genText;
 }
 var PRobo = (function (_super) {
     __extends(PRobo, _super);
@@ -22154,7 +22184,7 @@ function sense(robo, isPlayer) {
                     }
                 }
             });
-            if (isShowingSensor && isPlayer && nd < range) {
+            if (g.hasScreen && isShowingSensor && isPlayer && nd < range) {
                 var p_1 = robo.game.p;
                 p_1.stroke(['#88f', '#ff8', '#f88'][ti]);
                 p_1.line(Math.cos(sa) * nd + robo.pos.x, Math.sin(sa) * nd + robo.pos.y, robo.pos.x, robo.pos.y);
