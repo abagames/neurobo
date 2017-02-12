@@ -164,7 +164,17 @@ function initRobo(robo) {
   robo.agent = new RL.DQNAgent({
     getNumStates: () => sensorNum * sensorDataCount * sensorType,
     getMaxNumActions: () => actionNum
-  }, {});
+  }, {
+      update: 'qlearn',
+      gamma: 0.9,
+      epsilon: 0.2,
+      alpha: 0.01,
+      experience_add_every: 10,
+      experience_size: 10000,
+      learning_steps_per_iteration: 10,
+      tderror_clamp: 1.0,
+      num_hidden_units: 100
+    });
 }
 
 function updateRobo(robo, isPlayer) {
