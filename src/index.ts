@@ -22,6 +22,7 @@ let ticks = 0;
 const isUsingDqn = true;
 const isShowingSensor = true;
 const isShowingReward = true;
+const isCloningMaxScoreDqn = false;
 
 function init() {
   g.init(update);
@@ -69,12 +70,22 @@ function nextGen(isFirst = false) {
       maxGame = game;
     }
   });
-  let nextPlayerDqn, nextEnemyDqn;
+  let nextPlayerDqns, nextEnemyDqns;
   if (!isFirst) {
-    nextPlayerDqn = (<any>maxGame.actorPool.get('probo')[0]).agent.toJSON();
-    nextEnemyDqn = (<any>minGame.actorPool.get('erobo')[0]).agent.toJSON();
+    if (isCloningMaxScoreDqn) {
+      const nextPlayerDqn = (<any>maxGame.actorPool.get('probo')[0]).agent.toJSON();
+      const nextEnemyDqn = (<any>minGame.actorPool.get('erobo')[0]).agent.toJSON();
+      nextPlayerDqns = _.times(gameCount, () => nextPlayerDqn);
+      nextEnemyDqns = _.times(gameCount, () => nextEnemyDqn);
+    } else {
+      nextPlayerDqns = _.times(gameCount, i =>
+        (<any>g.games[i].actorPool.get('probo')[0]).agent.toJSON());
+      nextEnemyDqns = _.times(gameCount, i =>
+        (<any>g.games[i].actorPool.get('erobo')[0]).agent.toJSON());
+    }
   }
   g.beginGame();
+  let gi = 0;
   _.forEach(g.games, g => {
     _.times(16, i => {
       const v = i * 8 + 4;
@@ -88,9 +99,10 @@ function nextGen(isFirst = false) {
     const pr = new PRobo(g);
     const er = new ERobo(g);
     if (!isFirst) {
-      pr.agent.fromJSON(nextPlayerDqn);
-      er.agent.fromJSON(nextEnemyDqn);
+      pr.agent.fromJSON(nextPlayerDqns[gi]);
+      er.agent.fromJSON(nextEnemyDqns[gi]);
     }
+    gi++;
   });
   ticks = 0;
 }
