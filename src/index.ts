@@ -31,7 +31,13 @@ function init() {
     network: [sensorNum * sensorDataCount * sensorType, [actionNum], actionNum]
   });
   _.times(gameCount, i => {
-    new g.Game();
+    const game = new g.Game();
+    game.p.mouseClicked = () => {
+      if (game.p.mouseX > 0 && game.p.mouseX < 128 &&
+        game.p.mouseY > 0 && game.p.mouseY < 128) {
+        game.score++;
+      }
+    };
   });
   nextGen(true);
 }

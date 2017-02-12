@@ -110,7 +110,7 @@ export class Game {
   networkPlayer;
   networkEnemy;
 
-  constructor() {
+  constructor(public updateFunc: Function = null) {
     this.random = new Random();
     this.setup = this.setup.bind(this);
     new p5((_p: p5) => {
@@ -184,7 +184,9 @@ export class Game {
   update() {
     this.screen.clear();
     sss.update();
-    //updateFunc();
+    if (this.updateFunc != null) {
+      updateFunc(this);
+    }
     _.forEach(this.modules, m => {
       if (m.isEnabled) {
         m.update();
