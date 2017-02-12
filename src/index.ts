@@ -19,16 +19,16 @@ let sensorDataCount = 1;
 const sensorType = 3;
 const actionNum = 7;
 let ticks = 0;
-let isUsingDqn = true;
+const isUsingDqn = true;
+const isShowingSensor = true;
+const isShowingReward = true;
 
 function init() {
   g.init(update);
   p = g.p;
   ne = new Neuroevolution({
     population: gameCount * 2,
-    network: [sensorNum * sensorDataCount * sensorType,
-    [actionNum * 2, actionNum * 2],
-      actionNum]
+    network: [sensorNum * sensorDataCount * sensorType, [actionNum], actionNum]
   });
   _.times(gameCount, i => {
     new g.Game();
@@ -188,7 +188,7 @@ function updateRobo(robo, isPlayer) {
       break;
     case 6:
       const type = isPlayer ? 'shot' : 'bullet';
-      if (robo.game.actorPool.get(type).length < 3) {
+      if (robo.game.actorPool.get(type).length < 5) {
         if (isPlayer) {
           new Shot(robo);
         } else {
@@ -205,10 +205,14 @@ function updateRobo(robo, isPlayer) {
   if (isUsingDqn) {
     robo.agent.learn(reward);
   }
+  if (isShowingReward && isPlayer && reward !== 0) {
+    const t = new g.Text(robo.game, `${reward}`);
+    t.pos.set(robo.pos);
+  }
   robo.prevScore = robo.game.score;
 }
 
-function sense(robo, isPlayer) {
+function sense(robo: g.Actor, isPlayer) {
   let aw = p.PI / (sensorNum - 1);
   let sa = robo.angle - p.HALF_PI - aw;
   const range = 128;
@@ -219,6 +223,7 @@ function sense(robo, isPlayer) {
       new SAT.Vector(range, 0).rotate(sa - aw / 2),
       new SAT.Vector(range, 0).rotate(sa + aw / 2)]
     );
+    let ti = 0;
     const types = isPlayer ? ['wall', 'erobo', 'bullet'] : ['wall', 'probo', 'shot'];
     return _.flatten(_.map(types, t => {
       let nd = range;
@@ -235,6 +240,14 @@ function sense(robo, isPlayer) {
           }
         }
       });
+      if (isShowingSensor && isPlayer && nd < range) {
+        const p = robo.game.p;
+        p.stroke(['#88f', '#ff8', '#f88'][ti]);
+        p.line(Math.cos(sa) * nd + robo.pos.x, Math.sin(sa) * nd + robo.pos.y,
+          robo.pos.x, robo.pos.y);
+        p.noStroke();
+      }
+      ti++;
       if (sensorDataCount === 2) {
         return na == null ? [0, 0] :
           [1 - nd / range, Math.abs(g.wrap(sa - na.angle, -p.PI, p.PI)) / p.PI];

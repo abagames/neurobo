@@ -333,3 +333,21 @@ export class Panel extends Actor {
     this.priority = -1;
   }
 }
+
+export class Text extends Actor {
+  constructor
+    (game: g.Game, public str: string, public duration = 30,
+    public align: g.text.Align = null) {
+    super(game);
+    this.vel.y = -2;
+  }
+
+  update() {
+    super.update();
+    this.vel.mult(0.9);
+    g.text.draw(this.game.screen.context, this.str, this.pos.x, this.pos.y, this.align);
+    if (this.ticks >= this.duration) {
+      this.remove();
+    }
+  }
+}
