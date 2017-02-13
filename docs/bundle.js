@@ -21938,21 +21938,17 @@ var isShowingSensor = true;
 var isShowingReward = true;
 var isCloningMaxScoreDqn = false;
 var generationCount = 0;
+var statesStackCount = 4;
 function init() {
     g.init(update);
     p = g.p;
     exports.ne = new Neuroevolution({
         population: gameCount * 2,
-        network: [sensorNum * sensorDataCount * sensorType, [actionNum], actionNum]
+        network: [sensorNum * sensorDataCount * sensorType * statesStackCount,
+            [actionNum], actionNum]
     });
-    _.times(gameCount, function (i) {
-        var game = new g.Game();
-        game.p.mouseClicked = function () {
-            if (game.p.mouseX > 0 && game.p.mouseX < 128 &&
-                game.p.mouseY > 0 && game.p.mouseY < 128) {
-                game.score++;
-            }
-        };
+    _.times(gameCount, function () {
+        new g.Game();
     });
     nextGen(true);
 }
@@ -22024,15 +22020,15 @@ function nextGen(isFirst) {
     });
     ticks = 0;
     generationCount++;
-    var genText = "Generation: " + generationCount + " ";
+    var iteText = "Iteration: " + generationCount;
     if (generationCount % 8 === 1) {
         g.setUpdateCount(1);
     }
     else {
         g.setUpdateCount(32);
-        genText += 'skipping';
+        iteText += ' skipping';
     }
-    document.getElementById('gen_text').textContent = genText;
+    document.getElementById('ite_text').textContent = iteText;
 }
 var PRobo = (function (_super) {
     __extends(PRobo, _super);
@@ -22040,6 +22036,9 @@ var PRobo = (function (_super) {
         if (agent === void 0) { agent = null; }
         var _this = _super.call(this, game) || this;
         _this.prevScore = 0;
+        _this.statesStack = [];
+        _this.statesStackIndex = 0;
+        _this.prevAct = 0;
         _this.pos.set(p.random(32, 128 - 32), 128 - 16);
         _this.angle = -p.HALF_PI / 2 - p.random(0, p.HALF_PI);
         _this.type = 'probo';
@@ -22062,6 +22061,9 @@ var ERobo = (function (_super) {
         if (agent === void 0) { agent = null; }
         var _this = _super.call(this, game) || this;
         _this.prevScore = 0;
+        _this.statesStack = [];
+        _this.statesStackIndex = 0;
+        _this.prevAct = 0;
         _this.pos.set(p.random(32, 128 - 32), 16);
         _this.angle = p.HALF_PI / 2 + p.random(0, p.HALF_PI);
         _this.type = 'erobo';
@@ -22087,7 +22089,7 @@ function initRobo(robo, agent) {
     }
     else {
         robo.agent = new RL.DQNAgent({
-            getNumStates: function () { return sensorNum * sensorDataCount * sensorType; },
+            getNumStates: function () { return sensorNum * sensorDataCount * sensorType * statesStackCount; },
             getMaxNumActions: function () { return actionNum; }
         }, {
             update: 'qlearn',
@@ -22104,22 +22106,40 @@ function initRobo(robo, agent) {
 }
 function updateRobo(robo, isPlayer) {
     robo.speed = 0;
-    var act = 0;
-    if (isUsingDqn) {
-        act = robo.agent.act(sense(robo, isPlayer));
-    }
-    else {
-        var acts = robo.network.compute(sense(robo, isPlayer));
-        var maxAct = 0;
-        for (var i = 0; i < acts.length; i++) {
-            var a = acts[i];
-            if (a > maxAct) {
-                act = i;
-                maxAct = a;
+    robo.statesStack.unshift(sense(robo, isPlayer));
+    if (robo.ticks % statesStackCount === statesStackCount - 1) {
+        var act = 0;
+        if (isUsingDqn) {
+            act = robo.agent.act(_.flatten(robo.statesStack));
+        }
+        else {
+            var acts = robo.network.compute(_.flatten(robo.statesStack));
+            var maxAct = 0;
+            for (var i = 0; i < acts.length; i++) {
+                var a = acts[i];
+                if (a > maxAct) {
+                    act = i;
+                    maxAct = a;
+                }
             }
         }
+        robo.statesStack = [];
+        if (act === 6) {
+            var type = isPlayer ? 'shot' : 'bullet';
+            if (robo.game.actorPool.get(type).length < 5) {
+                if (isPlayer) {
+                    new Shot(robo);
+                }
+                else {
+                    new Bullet(robo);
+                }
+            }
+        }
+        else {
+            robo.prevAct = act;
+        }
     }
-    switch (act) {
+    switch (robo.prevAct) {
         case 0:
             robo.angle += 0.05;
             break;
@@ -22140,31 +22160,23 @@ function updateRobo(robo, isPlayer) {
             robo.pos.x -= Math.sin(robo.angle);
             robo.pos.y += Math.cos(robo.angle);
             break;
-        case 6:
-            var type = isPlayer ? 'shot' : 'bullet';
-            if (robo.game.actorPool.get(type).length < 5) {
-                if (isPlayer) {
-                    new Shot(robo);
-                }
-                else {
-                    new Bullet(robo);
-                }
-            }
-            break;
     }
     robo.polygon.setOffset(new SAT.Vector(robo.pos.x - 4, robo.pos.y - 4));
-    var reward = robo.game.score - robo.prevScore;
-    if (!isPlayer) {
-        reward *= -1;
+    if (robo.ticks % statesStackCount === statesStackCount - 1) {
+        var reward = robo.game.score - robo.prevScore;
+        if (!isPlayer) {
+            reward *= -1;
+        }
+        robo.prevScore = robo.game.score;
+        reward = p.constrain(reward, -1, 1);
+        if (isUsingDqn) {
+            robo.agent.learn(reward);
+        }
+        if (isShowingReward && isPlayer && reward !== 0) {
+            var t = new g.Text(robo.game, "" + reward);
+            t.pos.set(robo.pos);
+        }
     }
-    if (isUsingDqn) {
-        robo.agent.learn(reward);
-    }
-    if (isShowingReward && isPlayer && reward !== 0) {
-        var t = new g.Text(robo.game, "" + reward);
-        t.pos.set(robo.pos);
-    }
-    robo.prevScore = robo.game.score;
 }
 function sense(robo, isPlayer) {
     var _this = this;
@@ -22212,8 +22224,8 @@ function sense(robo, isPlayer) {
 }
 var Shot = (function (_super) {
     __extends(Shot, _super);
-    function Shot(g) {
-        var _this = _super.call(this, g) || this;
+    function Shot(actor) {
+        var _this = _super.call(this, actor) || this;
         _this.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
         _this.collision.set(4, 4);
         return _this;
@@ -22226,8 +22238,8 @@ var Shot = (function (_super) {
 }(g.Shot));
 var Bullet = (function (_super) {
     __extends(Bullet, _super);
-    function Bullet(g) {
-        var _this = _super.call(this, g) || this;
+    function Bullet(actor) {
+        var _this = _super.call(this, actor) || this;
         _this.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
         _this.collision.set(4, 4);
         return _this;

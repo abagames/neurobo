@@ -34,14 +34,8 @@ function init() {
     network: [sensorNum * sensorDataCount * sensorType * statesStackCount,
     [actionNum], actionNum]
   });
-  _.times(gameCount, i => {
-    const game = new g.Game();
-    game.p.mouseClicked = () => {
-      if (game.p.mouseX > 0 && game.p.mouseX < 128 &&
-        game.p.mouseY > 0 && game.p.mouseY < 128) {
-        game.score++;
-      }
-    };
+  _.times(gameCount, () => {
+    new g.Game();
   });
   nextGen(true);
 }
@@ -110,14 +104,14 @@ function nextGen(isFirst = false) {
   });
   ticks = 0;
   generationCount++;
-  let genText = `Generation: ${generationCount} `;
+  let iteText = `Iteration: ${generationCount}`;
   if (generationCount % 8 === 1) {
     g.setUpdateCount(1);
   } else {
     g.setUpdateCount(32);
-    genText += 'skipping';
+    iteText += ' skipping';
   }
-  document.getElementById('gen_text').textContent = genText;
+  document.getElementById('ite_text').textContent = iteText;
 }
 
 class PRobo extends g.Player {
