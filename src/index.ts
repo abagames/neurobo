@@ -24,13 +24,15 @@ const isShowingSensor = true;
 const isShowingReward = true;
 const isCloningMaxScoreDqn = false;
 let generationCount = 0;
+const statesStackCount = 4;
 
 function init() {
   g.init(update);
   p = g.p;
   ne = new Neuroevolution({
     population: gameCount * 2,
-    network: [sensorNum * sensorDataCount * sensorType, [actionNum], actionNum]
+    network: [sensorNum * sensorDataCount * sensorType * statesStackCount,
+    [actionNum], actionNum]
   });
   _.times(gameCount, i => {
     const game = new g.Game();
@@ -123,6 +125,9 @@ class PRobo extends g.Player {
   network;
   agent;
   prevScore = 0;
+  statesStack: number[][] = [];
+  statesStackIndex = 0;
+  prevAct = 0;
 
   constructor(game: g.Game, agent = null) {
     super(game);
@@ -148,6 +153,9 @@ class ERobo extends g.Enemy {
   network;
   agent;
   prevScore = 0;
+  statesStack: number[][] = [];
+  statesStackIndex = 0;
+  prevAct = 0;
 
   constructor(game: g.Game, agent = null) {
     super(game);
@@ -168,7 +176,7 @@ class ERobo extends g.Enemy {
   }
 }
 
-function initRobo(robo, agent) {
+function initRobo(robo: PRobo | ERobo, agent) {
   new g.CollideToWall(robo, { velRatio: 0 });
   robo.collision.set(8, 8);
   robo.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
@@ -176,7 +184,7 @@ function initRobo(robo, agent) {
     robo.agent = agent;
   } else {
     robo.agent = new RL.DQNAgent({
-      getNumStates: () => sensorNum * sensorDataCount * sensorType,
+      getNumStates: () => sensorNum * sensorDataCount * sensorType * statesStackCount,
       getMaxNumActions: () => actionNum
     }, {
         update: 'qlearn',
@@ -192,23 +200,39 @@ function initRobo(robo, agent) {
   }
 }
 
-function updateRobo(robo, isPlayer) {
+function updateRobo(robo: PRobo | ERobo, isPlayer) {
   robo.speed = 0;
-  let act = 0;
-  if (isUsingDqn) {
-    act = robo.agent.act(sense(robo, isPlayer));
-  } else {
-    const acts = robo.network.compute(sense(robo, isPlayer));
-    let maxAct = 0;
-    for (let i = 0; i < acts.length; i++) {
-      const a = acts[i];
-      if (a > maxAct) {
-        act = i;
-        maxAct = a;
+  robo.statesStack.unshift(sense(robo, isPlayer));
+  if (robo.ticks % statesStackCount === statesStackCount - 1) {
+    let act = 0;
+    if (isUsingDqn) {
+      act = robo.agent.act(_.flatten(robo.statesStack));
+    } else {
+      const acts = robo.network.compute(_.flatten(robo.statesStack));
+      let maxAct = 0;
+      for (let i = 0; i < acts.length; i++) {
+        const a = acts[i];
+        if (a > maxAct) {
+          act = i;
+          maxAct = a;
+        }
       }
     }
+    robo.statesStack = [];
+    if (act === 6) {
+      const type = isPlayer ? 'shot' : 'bullet';
+      if (robo.game.actorPool.get(type).length < 5) {
+        if (isPlayer) {
+          new Shot(robo);
+        } else {
+          new Bullet(robo);
+        }
+      }
+    } else {
+      robo.prevAct = act;
+    }
   }
-  switch (act) {
+  switch (robo.prevAct) {
     case 0:
       robo.angle += 0.05;
       break;
@@ -229,30 +253,23 @@ function updateRobo(robo, isPlayer) {
       robo.pos.x -= Math.sin(robo.angle);
       robo.pos.y += Math.cos(robo.angle);
       break;
-    case 6:
-      const type = isPlayer ? 'shot' : 'bullet';
-      if (robo.game.actorPool.get(type).length < 5) {
-        if (isPlayer) {
-          new Shot(robo);
-        } else {
-          new Bullet(robo);
-        }
-      }
-      break;
   }
   robo.polygon.setOffset(new SAT.Vector(robo.pos.x - 4, robo.pos.y - 4));
-  let reward = robo.game.score - robo.prevScore;
-  if (!isPlayer) {
-    reward *= -1;
+  if (robo.ticks % statesStackCount === statesStackCount - 1) {
+    let reward = robo.game.score - robo.prevScore;
+    if (!isPlayer) {
+      reward *= -1;
+    }
+    robo.prevScore = robo.game.score;
+    reward = p.constrain(reward, -1, 1);
+    if (isUsingDqn) {
+      robo.agent.learn(reward);
+    }
+    if (isShowingReward && isPlayer && reward !== 0) {
+      const t = new g.Text(robo.game, `${reward}`);
+      t.pos.set(robo.pos);
+    }
   }
-  if (isUsingDqn) {
-    robo.agent.learn(reward);
-  }
-  if (isShowingReward && isPlayer && reward !== 0) {
-    const t = new g.Text(robo.game, `${reward}`);
-    t.pos.set(robo.pos);
-  }
-  robo.prevScore = robo.game.score;
 }
 
 function sense(robo: g.Actor, isPlayer) {
@@ -304,8 +321,8 @@ function sense(robo: g.Actor, isPlayer) {
 class Shot extends g.Shot {
   polygon: SAT.Polygon;
 
-  constructor(g: g.Game) {
-    super(g);
+  constructor(actor) {
+    super(actor);
     this.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
     this.collision.set(4, 4);
   }
@@ -319,8 +336,8 @@ class Shot extends g.Shot {
 class Bullet extends g.Bullet {
   polygon: SAT.Polygon;
 
-  constructor(g: g.Game) {
-    super(g);
+  constructor(actor) {
+    super(actor);
     this.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
     this.collision.set(4, 4);
   }
