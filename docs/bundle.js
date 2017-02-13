@@ -21986,17 +21986,17 @@ function nextGen(isFirst) {
     var nextPlayerDqns, nextEnemyDqns;
     if (!isFirst) {
         if (isCloningMaxScoreDqn) {
-            var nextPlayerDqn_1 = maxGame.actorPool.get('probo')[0].agent.toJSON();
-            var nextEnemyDqn_1 = minGame.actorPool.get('erobo')[0].agent.toJSON();
-            nextPlayerDqns = _.times(gameCount, function () { return nextPlayerDqn_1; });
-            nextEnemyDqns = _.times(gameCount, function () { return nextEnemyDqn_1; });
+            var nextPlayerDqn_1 = maxGame.actorPool.get('probo')[0].agent;
+            var nextEnemyDqn_1 = minGame.actorPool.get('erobo')[0].agent;
+            nextPlayerDqns = _.times(gameCount, function () { return _.cloneDeep(nextPlayerDqn_1); });
+            nextEnemyDqns = _.times(gameCount, function () { return _.cloneDeep(nextEnemyDqn_1); });
         }
         else {
             nextPlayerDqns = _.times(gameCount, function (i) {
-                return g.games[i].actorPool.get('probo')[0].agent.toJSON();
+                return g.games[i].actorPool.get('probo')[0].agent;
             });
             nextEnemyDqns = _.times(gameCount, function (i) {
-                return g.games[i].actorPool.get('erobo')[0].agent.toJSON();
+                return g.games[i].actorPool.get('erobo')[0].agent;
             });
         }
     }
@@ -22012,11 +22012,13 @@ function nextGen(isFirst) {
                 new Wall(g, p.createVector(128 - 4, v));
             }
         });
-        var pr = new PRobo(g);
-        var er = new ERobo(g);
-        if (!isFirst) {
-            pr.agent.fromJSON(nextPlayerDqns[gi]);
-            er.agent.fromJSON(nextEnemyDqns[gi]);
+        if (isFirst) {
+            new PRobo(g);
+            new ERobo(g);
+        }
+        else {
+            new PRobo(g, nextPlayerDqns[gi]);
+            new ERobo(g, nextEnemyDqns[gi]);
         }
         gi++;
     });
@@ -22034,14 +22036,15 @@ function nextGen(isFirst) {
 }
 var PRobo = (function (_super) {
     __extends(PRobo, _super);
-    function PRobo(game) {
+    function PRobo(game, agent) {
+        if (agent === void 0) { agent = null; }
         var _this = _super.call(this, game) || this;
         _this.prevScore = 0;
         _this.pos.set(p.random(32, 128 - 32), 128 - 16);
         _this.angle = -p.HALF_PI / 2 - p.random(0, p.HALF_PI);
         _this.type = 'probo';
         _this.network = game.networkPlayer;
-        initRobo(_this);
+        initRobo(_this, agent);
         return _this;
     }
     PRobo.prototype.update = function () {
@@ -22055,14 +22058,15 @@ var PRobo = (function (_super) {
 }(g.Player));
 var ERobo = (function (_super) {
     __extends(ERobo, _super);
-    function ERobo(game) {
+    function ERobo(game, agent) {
+        if (agent === void 0) { agent = null; }
         var _this = _super.call(this, game) || this;
         _this.prevScore = 0;
         _this.pos.set(p.random(32, 128 - 32), 16);
         _this.angle = p.HALF_PI / 2 + p.random(0, p.HALF_PI);
         _this.type = 'erobo';
         _this.network = game.networkEnemy;
-        initRobo(_this);
+        initRobo(_this, agent);
         return _this;
     }
     ERobo.prototype.update = function () {
@@ -22074,24 +22078,29 @@ var ERobo = (function (_super) {
     };
     return ERobo;
 }(g.Enemy));
-function initRobo(robo) {
+function initRobo(robo, agent) {
     new g.CollideToWall(robo, { velRatio: 0 });
     robo.collision.set(8, 8);
     robo.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
-    robo.agent = new RL.DQNAgent({
-        getNumStates: function () { return sensorNum * sensorDataCount * sensorType; },
-        getMaxNumActions: function () { return actionNum; }
-    }, {
-        update: 'qlearn',
-        gamma: 0.9,
-        epsilon: 0.2,
-        alpha: 0.01,
-        experience_add_every: 10,
-        experience_size: 10000,
-        learning_steps_per_iteration: 10,
-        tderror_clamp: 1.0,
-        num_hidden_units: 100
-    });
+    if (agent != null) {
+        robo.agent = agent;
+    }
+    else {
+        robo.agent = new RL.DQNAgent({
+            getNumStates: function () { return sensorNum * sensorDataCount * sensorType; },
+            getMaxNumActions: function () { return actionNum; }
+        }, {
+            update: 'qlearn',
+            gamma: 0.9,
+            epsilon: 0.2,
+            alpha: 0.01,
+            experience_add_every: 10,
+            experience_size: 10000,
+            learning_steps_per_iteration: 10,
+            tderror_clamp: 1.0,
+            num_hidden_units: 100
+        });
+    }
 }
 function updateRobo(robo, isPlayer) {
     robo.speed = 0;

@@ -74,15 +74,15 @@ function nextGen(isFirst = false) {
   let nextPlayerDqns, nextEnemyDqns;
   if (!isFirst) {
     if (isCloningMaxScoreDqn) {
-      const nextPlayerDqn = (<any>maxGame.actorPool.get('probo')[0]).agent.toJSON();
-      const nextEnemyDqn = (<any>minGame.actorPool.get('erobo')[0]).agent.toJSON();
-      nextPlayerDqns = _.times(gameCount, () => nextPlayerDqn);
-      nextEnemyDqns = _.times(gameCount, () => nextEnemyDqn);
+      const nextPlayerDqn = (<any>maxGame.actorPool.get('probo')[0]).agent;
+      const nextEnemyDqn = (<any>minGame.actorPool.get('erobo')[0]).agent;
+      nextPlayerDqns = _.times(gameCount, () => _.cloneDeep(nextPlayerDqn));
+      nextEnemyDqns = _.times(gameCount, () => _.cloneDeep(nextEnemyDqn));
     } else {
       nextPlayerDqns = _.times(gameCount, i =>
-        (<any>g.games[i].actorPool.get('probo')[0]).agent.toJSON());
+        (<any>g.games[i].actorPool.get('probo')[0]).agent);
       nextEnemyDqns = _.times(gameCount, i =>
-        (<any>g.games[i].actorPool.get('erobo')[0]).agent.toJSON());
+        (<any>g.games[i].actorPool.get('erobo')[0]).agent);
     }
   }
   g.beginGame();
@@ -97,11 +97,12 @@ function nextGen(isFirst = false) {
         new Wall(g, p.createVector(128 - 4, v));
       }
     });
-    const pr = new PRobo(g);
-    const er = new ERobo(g);
-    if (!isFirst) {
-      pr.agent.fromJSON(nextPlayerDqns[gi]);
-      er.agent.fromJSON(nextEnemyDqns[gi]);
+    if (isFirst) {
+      new PRobo(g);
+      new ERobo(g);
+    } else {
+      new PRobo(g, nextPlayerDqns[gi]);
+      new ERobo(g, nextEnemyDqns[gi]);
     }
     gi++;
   });
@@ -123,13 +124,13 @@ class PRobo extends g.Player {
   agent;
   prevScore = 0;
 
-  constructor(game: g.Game) {
+  constructor(game: g.Game, agent = null) {
     super(game);
     this.pos.set(p.random(32, 128 - 32), 128 - 16);
     this.angle = -p.HALF_PI / 2 - p.random(0, p.HALF_PI);
     this.type = 'probo';
     this.network = game.networkPlayer;
-    initRobo(this);
+    initRobo(this, agent);
   }
 
   update() {
@@ -148,13 +149,13 @@ class ERobo extends g.Enemy {
   agent;
   prevScore = 0;
 
-  constructor(game: g.Game) {
+  constructor(game: g.Game, agent = null) {
     super(game);
     this.pos.set(p.random(32, 128 - 32), 16);
     this.angle = p.HALF_PI / 2 + p.random(0, p.HALF_PI);
     this.type = 'erobo';
     this.network = game.networkEnemy;
-    initRobo(this);
+    initRobo(this, agent);
   }
 
   update() {
@@ -167,24 +168,28 @@ class ERobo extends g.Enemy {
   }
 }
 
-function initRobo(robo) {
+function initRobo(robo, agent) {
   new g.CollideToWall(robo, { velRatio: 0 });
   robo.collision.set(8, 8);
   robo.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
-  robo.agent = new RL.DQNAgent({
-    getNumStates: () => sensorNum * sensorDataCount * sensorType,
-    getMaxNumActions: () => actionNum
-  }, {
-      update: 'qlearn',
-      gamma: 0.9,
-      epsilon: 0.2,
-      alpha: 0.01,
-      experience_add_every: 10,
-      experience_size: 10000,
-      learning_steps_per_iteration: 10,
-      tderror_clamp: 1.0,
-      num_hidden_units: 100
-    });
+  if (agent != null) {
+    robo.agent = agent;
+  } else {
+    robo.agent = new RL.DQNAgent({
+      getNumStates: () => sensorNum * sensorDataCount * sensorType,
+      getMaxNumActions: () => actionNum
+    }, {
+        update: 'qlearn',
+        gamma: 0.9,
+        epsilon: 0.2,
+        alpha: 0.01,
+        experience_add_every: 10,
+        experience_size: 10000,
+        learning_steps_per_iteration: 10,
+        tderror_clamp: 1.0,
+        num_hidden_units: 100
+      });
+  }
 }
 
 function updateRobo(robo, isPlayer) {
