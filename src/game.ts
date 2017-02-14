@@ -43,6 +43,9 @@ export function init(_updateFunc: Function) {
   seedRandom = new Random();
   new p5((_p: p5) => {
     p = _p;
+    p.setup = () => {
+      p.createCanvas(0, 0);
+    };
     p.draw = update;
   });
 }
@@ -125,7 +128,6 @@ export class Game {
     new p5((_p: p5) => {
       this.p = _p;
       _p.setup = this.setup;
-      p.createCanvas(0, 0);
     });
     games.push(this);
   }
@@ -170,9 +172,8 @@ export class Game {
 
   setup() {
     const canvas = this.p.createCanvas(128, 128);
-    //canvas.parent(this.parentId);
-    //canvas.canvas.setAttribute('style', null);
     canvas.canvas.setAttribute('class', 'pixelated');
+    canvas.parent('main');
     this.screen = new Screen(canvas.canvas, this.p);
     this.p.noStroke();
     this.p.noSmooth();
