@@ -118,6 +118,9 @@ function init(_updateFunc) {
     seedRandom = new random_1.default();
     new exports.p5(function (_p) {
         exports.p = _p;
+        exports.p.setup = function () {
+            exports.p.createCanvas(0, 0);
+        };
         exports.p.draw = update;
     });
 }
@@ -193,7 +196,6 @@ var Game = (function () {
         new exports.p5(function (_p) {
             _this.p = _p;
             _p.setup = _this.setup;
-            exports.p.createCanvas(0, 0);
         });
         exports.games.push(this);
     }
@@ -232,9 +234,8 @@ var Game = (function () {
     };
     Game.prototype.setup = function () {
         var canvas = this.p.createCanvas(128, 128);
-        //canvas.parent(this.parentId);
-        //canvas.canvas.setAttribute('style', null);
         canvas.canvas.setAttribute('class', 'pixelated');
+        canvas.parent('main');
         this.screen = new Screen(canvas.canvas, this.p);
         this.p.noStroke();
         this.p.noSmooth();
