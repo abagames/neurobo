@@ -63,6 +63,14 @@ export function setUpdateCount(c: number) {
   updateCount = c;
 }
 
+export function beginSetting() {
+  clearGameStatus();
+  hasScreen = true;
+  _.forEach(games, g => {
+    g.beginSetting();
+  });
+}
+
 export function beginGame() {
   clearGameStatus();
   const seed = seedRandom.getInt(9999999);
@@ -71,6 +79,18 @@ export function beginGame() {
   });
   //ir.startRecord();
   //this.initialStatus.r = seed;
+}
+
+export function pauseGame() {
+  _.forEach(games, g => {
+    g.pauseGame();
+  });
+}
+
+export function restartGame() {
+  _.forEach(games, g => {
+    g.restartGame();
+  });
 }
 
 export function beginReplay() {
@@ -109,6 +129,10 @@ export function update() {
   });
 }
 
+export enum GameState {
+  setting, started, paused
+}
+
 export class Game {
   p: p5;
   actorPool = new ActorPool();
@@ -119,8 +143,9 @@ export class Game {
   isDebugEnabled = false;
   modules = [];
   initialStatus = { r: 0 };
-  networkPlayer;
-  networkEnemy;
+  //networkPlayer;
+  //networkEnemy;
+  state = GameState.setting;
 
   constructor() {
     this.random = new Random();
@@ -132,10 +157,10 @@ export class Game {
     games.push(this);
   }
 
-  setNetwork(networkPlayer, networkEnemy) {
+  /*setNetwork(networkPlayer, networkEnemy) {
     this.networkPlayer = networkPlayer;
     this.networkEnemy = networkEnemy;
-  }
+  }*/
 
   enableDebug(_onSeedChangedFunc = null) {
     debug.initSeedUi(this.setSeeds);
@@ -179,9 +204,23 @@ export class Game {
     this.p.noSmooth();
   }
 
+  beginSetting() {
+    this.state = GameState.setting;
+    this.clearGameStatus();
+  }
+
   beginGame(seed: number) {
+    this.state = GameState.started;
     this.clearGameStatus();
     this.random.setSeed(seed);
+  }
+
+  pauseGame() {
+    this.state = GameState.paused;
+  }
+
+  restartGame() {
+    this.state = GameState.started;
   }
 
   clearGameStatus() {
@@ -192,6 +231,9 @@ export class Game {
   }
 
   update() {
+    if (this.state === GameState.paused) {
+      return;
+    }
     if (!hasScreen) {
       _.forEach(this.modules, m => {
         if (m.isEnabled) {

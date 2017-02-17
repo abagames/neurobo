@@ -2,19 +2,20 @@ import * as _ from 'lodash';
 import * as SAT from 'sat';
 import * as g from './game';
 declare const require: any;
-const Neuroevolution = require('Neuroevolution');
+//const Neuroevolution = require('Neuroevolution');
 const RL = require('rl');
 
 window.onload = init;
 
-export let ne;
+//export let ne;
 let game: g.Game;
 let targetGame: g.Game;
 let prevCodes: any[];
 let addActorsCode: string;
 let p: p5;
 let gameCount = 4;
-const sensorNum = 7;
+let pRoboSpec: RoboSpec;
+let eRoboSpec: RoboSpec;
 let sensorDataCount = 1;
 const sensorType = 3;
 const actionNum = 7;
@@ -23,41 +24,113 @@ const isUsingDqn = true;
 const isShowingSensor = true;
 const isShowingReward = true;
 const isCloningMaxScoreDqn = false;
-let generationCount = 0;
+let iterationCount = 0;
 const statesStackCount = 4;
+let gameState: g.GameState;
 
 function init() {
   g.init(update);
   p = g.p;
-  ne = new Neuroevolution({
+  /*ne = new Neuroevolution({
     population: gameCount * 2,
     network: [sensorNum * sensorDataCount * sensorType * statesStackCount,
     [actionNum], actionNum]
-  });
+  });*/
+  pRoboSpec = new RoboSpec();
+  eRoboSpec = new RoboSpec();
+  initUi();
   _.times(gameCount, () => {
     new g.Game();
   });
-  nextGen(true);
+  beginSetting();
+}
+
+function initUi() {
+  document.getElementById('start-button').addEventListener('click', () => {
+    changeState();
+  });
+  _.forOwn(pRoboSpec, (v, k) => {
+    document.getElementById(`${k}-probo`).addEventListener('input', e => {
+      pRoboSpec[k] = (<any>e.srcElement).valueAsNumber;
+      beginSetting();
+    });
+    document.getElementById(`${k}-erobo`).addEventListener('input', e => {
+      eRoboSpec[k] = (<any>e.srcElement).valueAsNumber;
+      beginSetting();
+    });
+  });
+}
+
+function changeState() {
+  if (gameState === g.GameState.setting) {
+    nextGen(true);
+    setStartedUi();
+  } else if (gameState === g.GameState.started) {
+    pauseGame();
+    document.getElementById('start-button').textContent = 'Restart';
+    _.forOwn(pRoboSpec, (v, k) => {
+      document.getElementById(`${k}-probo`).removeAttribute('disabled');
+      document.getElementById(`${k}-erobo`).removeAttribute('disabled');
+    });
+  } else if (gameState === g.GameState.paused) {
+    restartGame();
+    setStartedUi();
+  }
+}
+
+function setStartedUi() {
+  document.getElementById('start-button').textContent = 'Pause';
+  _.forOwn(pRoboSpec, (v, k) => {
+    document.getElementById(`${k}-probo`).setAttribute('disabled', '');
+    document.getElementById(`${k}-erobo`).setAttribute('disabled', '');
+  });
+}
+
+function pauseGame() {
+  gameState = g.GameState.paused;
+  g.pauseGame();
+}
+
+function restartGame() {
+  gameState = g.GameState.started;
+  g.restartGame();
 }
 
 function update() {
+  if (gameState !== g.GameState.started) {
+    return;
+  }
   ticks++;
   if (ticks > 600) {
-    _.forEach(g.games, g => {
+    _/*.forEach(g.games, g => {
       ne.networkScore(g.networkPlayer, g.score);
       ne.networkScore(g.networkEnemy, -g.score);
-    });
+    });*/
     nextGen();
   }
 }
 
+function beginSetting() {
+  if (gameState === g.GameState.setting) {
+    return;
+  }
+  gameState = g.GameState.setting;
+  document.getElementById('start-button').textContent = 'Start';
+  g.beginSetting();
+  const lg = g.games[0];
+  new PRobo(lg, pRoboSpec, null, true);
+  const rg = g.games[gameCount - 1];
+  new ERobo(rg, eRoboSpec, null, true);
+}
+
 function nextGen(isFirst = false) {
+  gameState = g.GameState.started;
   let minScore = 99999, maxScore = -99999;
   let minGame: g.Game, maxGame: g.Game;
-  const networks = ne.nextGeneration();
+  //const networks = ne.nextGeneration();
   _.times(gameCount, i => {
     const game = g.games[i];
-    game.setNetwork(networks[i], networks[i + gameCount]);
+    //game.setNetwork(networks[i], networks[i + gameCount]);
     if (game.score < minScore) {
       minScore = game.score;
       minGame = game;
@@ -94,24 +167,31 @@ function nextGen(isFirst = false) {
       }
     });
     if (isFirst) {
-      new PRobo(g);
-      new ERobo(g);
+      iterationCount = 0;
+      new PRobo(g, pRoboSpec);
+      new ERobo(g, eRoboSpec);
     } else {
-      new PRobo(g, nextPlayerDqns[gi]);
-      new ERobo(g, nextEnemyDqns[gi]);
+      new PRobo(g, pRoboSpec, nextPlayerDqns[gi]);
+      new ERobo(g, eRoboSpec, nextEnemyDqns[gi]);
     }
     gi++;
   });
   ticks = 0;
-  generationCount++;
-  let iteText = `Iteration: ${generationCount}`;
-  if (generationCount % 8 === 1) {
+  iterationCount++;
+  let iteText = `Iteration: ${iterationCount}`;
+  if (iterationCount % 10 === 1) {
     g.setUpdateCount(1);
   } else {
     g.setUpdateCount(32);
     iteText += ' skipping';
   }
   document.getElementById('ite_text').textContent = iteText;
+}
+
+class RoboSpec {
+  sensorAngle = 3;
+  sensorCount = 7;
+  sensorRange = 96;
 }
 
 class PRobo extends g.Player {
@@ -123,12 +203,17 @@ class PRobo extends g.Player {
   statesStackIndex = 0;
   prevAct = 0;
 
-  constructor(game: g.Game, agent = null) {
+  constructor(game: g.Game, public spec: RoboSpec, agent = null, public isSetting = false) {
     super(game);
-    this.pos.set(p.random(32, 128 - 32), 128 - 16);
-    this.angle = -p.HALF_PI / 2 - p.random(0, p.HALF_PI);
+    if (isSetting) {
+      this.pos.set(64, 128 - 16);
+      this.angle = -p.HALF_PI;
+    } else {
+      this.pos.set(p.random(32, 128 - 32), 128 - 16);
+      this.angle = -p.HALF_PI / 2 - p.random(0, p.HALF_PI);
+    }
     this.type = 'probo';
-    this.network = game.networkPlayer;
+    //this.network = game.networkPlayer;
     initRobo(this, agent);
   }
 
@@ -151,12 +236,17 @@ class ERobo extends g.Enemy {
   statesStackIndex = 0;
   prevAct = 0;
 
-  constructor(game: g.Game, agent = null) {
+  constructor(game: g.Game, public spec: RoboSpec, agent = null, public isSetting = false) {
     super(game);
-    this.pos.set(p.random(32, 128 - 32), 16);
-    this.angle = p.HALF_PI / 2 + p.random(0, p.HALF_PI);
+    if (isSetting) {
+      this.pos.set(64, 128 - 16);
+      this.angle = -p.HALF_PI;
+    } else {
+      this.pos.set(p.random(32, 128 - 32), 16);
+      this.angle = p.HALF_PI / 2 + p.random(0, p.HALF_PI);
+    }
     this.type = 'erobo';
-    this.network = game.networkEnemy;
+    //this.network = game.networkEnemy;
     initRobo(this, agent);
   }
 
@@ -171,6 +261,9 @@ class ERobo extends g.Enemy {
 }
 
 function initRobo(robo: PRobo | ERobo, agent) {
+  if (robo.isSetting) {
+    return;
+  }
   new g.CollideToWall(robo, { velRatio: 0 });
   robo.collision.set(8, 8);
   robo.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
@@ -178,7 +271,7 @@ function initRobo(robo: PRobo | ERobo, agent) {
     robo.agent = agent;
   } else {
     robo.agent = new RL.DQNAgent({
-      getNumStates: () => sensorNum * sensorDataCount * sensorType * statesStackCount,
+      getNumStates: () => robo.spec.sensorCount * sensorDataCount * sensorType * statesStackCount,
       getMaxNumActions: () => actionNum
     }, {
         update: 'qlearn',
@@ -195,6 +288,10 @@ function initRobo(robo: PRobo | ERobo, agent) {
 }
 
 function updateRobo(robo: PRobo | ERobo, isPlayer) {
+  if (robo.isSetting) {
+    sense(robo, isPlayer);
+    return;
+  }
   robo.speed = 0;
   robo.statesStack.unshift(sense(robo, isPlayer));
   if (robo.ticks % statesStackCount === statesStackCount - 1) {
@@ -266,11 +363,11 @@ function updateRobo(robo: PRobo | ERobo, isPlayer) {
   }
 }
 
-function sense(robo: g.Actor, isPlayer) {
-  let aw = p.PI / (sensorNum - 1);
-  let sa = robo.angle - p.HALF_PI - aw;
-  const range = 128;
-  return _.flatten(_.times(sensorNum, i => {
+function sense(robo: PRobo | ERobo, isPlayer) {
+  let aw = robo.spec.sensorAngle / (robo.spec.sensorCount - 1);
+  let sa = robo.angle - robo.spec.sensorAngle / 2 - aw;
+  const range = robo.spec.sensorRange;
+  return _.flatten(_.times(robo.spec.sensorCount, i => {
     sa += aw;
     const sensor = new SAT.Polygon(new SAT.Vector(robo.pos.x, robo.pos.y),
       [new SAT.Vector(),
@@ -294,7 +391,7 @@ function sense(robo: g.Actor, isPlayer) {
           }
         }
       });
-      if (g.hasScreen && isShowingSensor && isPlayer && nd < range) {
+      if (robo.isSetting || (g.hasScreen && isShowingSensor && nd < range)) {
         const p = robo.game.p;
         p.stroke(['#88f', '#ff8', '#f88'][ti]);
         p.line(Math.cos(sa) * nd + robo.pos.x, Math.sin(sa) * nd + robo.pos.y,

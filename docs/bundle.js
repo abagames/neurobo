@@ -63,7 +63,7 @@
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 20);
+/******/ 	return __webpack_require__(__webpack_require__.s = 19);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -137,6 +137,14 @@ function setUpdateCount(c) {
     updateCount = c;
 }
 exports.setUpdateCount = setUpdateCount;
+function beginSetting() {
+    clearGameStatus();
+    exports.hasScreen = true;
+    _.forEach(exports.games, function (g) {
+        g.beginSetting();
+    });
+}
+exports.beginSetting = beginSetting;
 function beginGame() {
     clearGameStatus();
     var seed = seedRandom.getInt(9999999);
@@ -147,6 +155,18 @@ function beginGame() {
     //this.initialStatus.r = seed;
 }
 exports.beginGame = beginGame;
+function pauseGame() {
+    _.forEach(exports.games, function (g) {
+        g.pauseGame();
+    });
+}
+exports.pauseGame = pauseGame;
+function restartGame() {
+    _.forEach(exports.games, function (g) {
+        g.restartGame();
+    });
+}
+exports.restartGame = restartGame;
 function beginReplay() {
     clearGameStatus();
     var status = ir.startReplay();
@@ -182,6 +202,12 @@ function update() {
     });
 }
 exports.update = update;
+var GameState;
+(function (GameState) {
+    GameState[GameState["setting"] = 0] = "setting";
+    GameState[GameState["started"] = 1] = "started";
+    GameState[GameState["paused"] = 2] = "paused";
+})(GameState = exports.GameState || (exports.GameState = {}));
 var Game = (function () {
     function Game() {
         var _this = this;
@@ -191,6 +217,9 @@ var Game = (function () {
         this.isDebugEnabled = false;
         this.modules = [];
         this.initialStatus = { r: 0 };
+        //networkPlayer;
+        //networkEnemy;
+        this.state = GameState.setting;
         this.random = new random_1.default();
         this.setup = this.setup.bind(this);
         new exports.p5(function (_p) {
@@ -199,10 +228,10 @@ var Game = (function () {
         });
         exports.games.push(this);
     }
-    Game.prototype.setNetwork = function (networkPlayer, networkEnemy) {
-        this.networkPlayer = networkPlayer;
-        this.networkEnemy = networkEnemy;
-    };
+    /*setNetwork(networkPlayer, networkEnemy) {
+      this.networkPlayer = networkPlayer;
+      this.networkEnemy = networkEnemy;
+    }*/
     Game.prototype.enableDebug = function (_onSeedChangedFunc) {
         if (_onSeedChangedFunc === void 0) { _onSeedChangedFunc = null; }
         debug.initSeedUi(this.setSeeds);
@@ -240,9 +269,20 @@ var Game = (function () {
         this.p.noStroke();
         this.p.noSmooth();
     };
+    Game.prototype.beginSetting = function () {
+        this.state = GameState.setting;
+        this.clearGameStatus();
+    };
     Game.prototype.beginGame = function (seed) {
+        this.state = GameState.started;
         this.clearGameStatus();
         this.random.setSeed(seed);
+    };
+    Game.prototype.pauseGame = function () {
+        this.state = GameState.paused;
+    };
+    Game.prototype.restartGame = function () {
+        this.state = GameState.started;
     };
     Game.prototype.clearGameStatus = function () {
         this.clearModules();
@@ -251,6 +291,9 @@ var Game = (function () {
         this.score = 0;
     };
     Game.prototype.update = function () {
+        if (this.state === GameState.paused) {
+            return;
+        }
         if (!exports.hasScreen) {
             _.forEach(this.modules, function (m) {
                 if (m.isEnabled) {
@@ -21920,16 +21963,18 @@ var __extends = (this && this.__extends) || function (d, b) {
 var _ = __webpack_require__(1);
 var SAT = __webpack_require__(15);
 var g = __webpack_require__(0);
-var Neuroevolution = __webpack_require__(18);
-var RL = __webpack_require__(19);
+//const Neuroevolution = require('Neuroevolution');
+var RL = __webpack_require__(18);
 window.onload = init;
+//export let ne;
 var game;
 var targetGame;
 var prevCodes;
 var addActorsCode;
 var p;
 var gameCount = 4;
-var sensorNum = 7;
+var pRoboSpec;
+var eRoboSpec;
 var sensorDataCount = 1;
 var sensorType = 3;
 var actionNum = 7;
@@ -21938,39 +21983,107 @@ var isUsingDqn = true;
 var isShowingSensor = true;
 var isShowingReward = true;
 var isCloningMaxScoreDqn = false;
-var generationCount = 0;
+var iterationCount = 0;
 var statesStackCount = 4;
+var gameState;
 function init() {
     g.init(update);
     p = g.p;
-    exports.ne = new Neuroevolution({
-        population: gameCount * 2,
-        network: [sensorNum * sensorDataCount * sensorType * statesStackCount,
-            [actionNum], actionNum]
-    });
+    /*ne = new Neuroevolution({
+      population: gameCount * 2,
+      network: [sensorNum * sensorDataCount * sensorType * statesStackCount,
+      [actionNum], actionNum]
+    });*/
+    pRoboSpec = new RoboSpec();
+    eRoboSpec = new RoboSpec();
+    initUi();
     _.times(gameCount, function () {
         new g.Game();
     });
-    nextGen(true);
+    beginSetting();
+}
+function initUi() {
+    document.getElementById('start-button').addEventListener('click', function () {
+        changeState();
+    });
+    _.forOwn(pRoboSpec, function (v, k) {
+        document.getElementById(k + "-probo").addEventListener('input', function (e) {
+            pRoboSpec[k] = e.srcElement.valueAsNumber;
+            beginSetting();
+        });
+        document.getElementById(k + "-erobo").addEventListener('input', function (e) {
+            eRoboSpec[k] = e.srcElement.valueAsNumber;
+            beginSetting();
+        });
+    });
+}
+function changeState() {
+    if (gameState === g.GameState.setting) {
+        nextGen(true);
+        setStartedUi();
+    }
+    else if (gameState === g.GameState.started) {
+        pauseGame();
+        document.getElementById('start-button').textContent = 'Restart';
+        _.forOwn(pRoboSpec, function (v, k) {
+            document.getElementById(k + "-probo").removeAttribute('disabled');
+            document.getElementById(k + "-erobo").removeAttribute('disabled');
+        });
+    }
+    else if (gameState === g.GameState.paused) {
+        restartGame();
+        setStartedUi();
+    }
+}
+function setStartedUi() {
+    document.getElementById('start-button').textContent = 'Pause';
+    _.forOwn(pRoboSpec, function (v, k) {
+        document.getElementById(k + "-probo").setAttribute('disabled', '');
+        document.getElementById(k + "-erobo").setAttribute('disabled', '');
+    });
+}
+function pauseGame() {
+    gameState = g.GameState.paused;
+    g.pauseGame();
+}
+function restartGame() {
+    gameState = g.GameState.started;
+    g.restartGame();
 }
 function update() {
+    if (gameState !== g.GameState.started) {
+        return;
+    }
     ticks++;
     if (ticks > 600) {
-        _.forEach(g.games, function (g) {
-            exports.ne.networkScore(g.networkPlayer, g.score);
-            exports.ne.networkScore(g.networkEnemy, -g.score);
-        });
+        _; /*.forEach(g.games, g => {
+          ne.networkScore(g.networkPlayer, g.score);
+          ne.networkScore(g.networkEnemy, -g.score);
+        });*/
         nextGen();
     }
 }
+function beginSetting() {
+    if (gameState === g.GameState.setting) {
+        return;
+    }
+    gameState = g.GameState.setting;
+    document.getElementById('start-button').textContent = 'Start';
+    g.beginSetting();
+    var lg = g.games[0];
+    new PRobo(lg, pRoboSpec, null, true);
+    var rg = g.games[gameCount - 1];
+    new ERobo(rg, eRoboSpec, null, true);
+}
 function nextGen(isFirst) {
     if (isFirst === void 0) { isFirst = false; }
+    gameState = g.GameState.started;
     var minScore = 99999, maxScore = -99999;
     var minGame, maxGame;
-    var networks = exports.ne.nextGeneration();
+    //const networks = ne.nextGeneration();
     _.times(gameCount, function (i) {
         var game = g.games[i];
-        game.setNetwork(networks[i], networks[i + gameCount]);
+        //game.setNetwork(networks[i], networks[i + gameCount]);
         if (game.score < minScore) {
             minScore = game.score;
             minGame = game;
@@ -22010,19 +22123,20 @@ function nextGen(isFirst) {
             }
         });
         if (isFirst) {
-            new PRobo(g);
-            new ERobo(g);
+            iterationCount = 0;
+            new PRobo(g, pRoboSpec);
+            new ERobo(g, eRoboSpec);
         }
         else {
-            new PRobo(g, nextPlayerDqns[gi]);
-            new ERobo(g, nextEnemyDqns[gi]);
+            new PRobo(g, pRoboSpec, nextPlayerDqns[gi]);
+            new ERobo(g, eRoboSpec, nextEnemyDqns[gi]);
         }
         gi++;
     });
     ticks = 0;
-    generationCount++;
-    var iteText = "Iteration: " + generationCount;
-    if (generationCount % 8 === 1) {
+    iterationCount++;
+    var iteText = "Iteration: " + iterationCount;
+    if (iterationCount % 10 === 1) {
         g.setUpdateCount(1);
     }
     else {
@@ -22031,19 +22145,36 @@ function nextGen(isFirst) {
     }
     document.getElementById('ite_text').textContent = iteText;
 }
+var RoboSpec = (function () {
+    function RoboSpec() {
+        this.sensorAngle = 3;
+        this.sensorCount = 7;
+        this.sensorRange = 96;
+    }
+    return RoboSpec;
+}());
 var PRobo = (function (_super) {
     __extends(PRobo, _super);
-    function PRobo(game, agent) {
+    function PRobo(game, spec, agent, isSetting) {
         if (agent === void 0) { agent = null; }
+        if (isSetting === void 0) { isSetting = false; }
         var _this = _super.call(this, game) || this;
+        _this.spec = spec;
+        _this.isSetting = isSetting;
         _this.prevScore = 0;
         _this.statesStack = [];
         _this.statesStackIndex = 0;
         _this.prevAct = 0;
-        _this.pos.set(p.random(32, 128 - 32), 128 - 16);
-        _this.angle = -p.HALF_PI / 2 - p.random(0, p.HALF_PI);
+        if (isSetting) {
+            _this.pos.set(64, 128 - 16);
+            _this.angle = -p.HALF_PI;
+        }
+        else {
+            _this.pos.set(p.random(32, 128 - 32), 128 - 16);
+            _this.angle = -p.HALF_PI / 2 - p.random(0, p.HALF_PI);
+        }
         _this.type = 'probo';
-        _this.network = game.networkPlayer;
+        //this.network = game.networkPlayer;
         initRobo(_this, agent);
         return _this;
     }
@@ -22058,17 +22189,26 @@ var PRobo = (function (_super) {
 }(g.Player));
 var ERobo = (function (_super) {
     __extends(ERobo, _super);
-    function ERobo(game, agent) {
+    function ERobo(game, spec, agent, isSetting) {
         if (agent === void 0) { agent = null; }
+        if (isSetting === void 0) { isSetting = false; }
         var _this = _super.call(this, game) || this;
+        _this.spec = spec;
+        _this.isSetting = isSetting;
         _this.prevScore = 0;
         _this.statesStack = [];
         _this.statesStackIndex = 0;
         _this.prevAct = 0;
-        _this.pos.set(p.random(32, 128 - 32), 16);
-        _this.angle = p.HALF_PI / 2 + p.random(0, p.HALF_PI);
+        if (isSetting) {
+            _this.pos.set(64, 128 - 16);
+            _this.angle = -p.HALF_PI;
+        }
+        else {
+            _this.pos.set(p.random(32, 128 - 32), 16);
+            _this.angle = p.HALF_PI / 2 + p.random(0, p.HALF_PI);
+        }
         _this.type = 'erobo';
-        _this.network = game.networkEnemy;
+        //this.network = game.networkEnemy;
         initRobo(_this, agent);
         return _this;
     }
@@ -22082,6 +22222,9 @@ var ERobo = (function (_super) {
     return ERobo;
 }(g.Enemy));
 function initRobo(robo, agent) {
+    if (robo.isSetting) {
+        return;
+    }
     new g.CollideToWall(robo, { velRatio: 0 });
     robo.collision.set(8, 8);
     robo.polygon = new SAT.Box(new SAT.Vector(), 8, 8).toPolygon();
@@ -22090,7 +22233,7 @@ function initRobo(robo, agent) {
     }
     else {
         robo.agent = new RL.DQNAgent({
-            getNumStates: function () { return sensorNum * sensorDataCount * sensorType * statesStackCount; },
+            getNumStates: function () { return robo.spec.sensorCount * sensorDataCount * sensorType * statesStackCount; },
             getMaxNumActions: function () { return actionNum; }
         }, {
             update: 'qlearn',
@@ -22106,6 +22249,10 @@ function initRobo(robo, agent) {
     }
 }
 function updateRobo(robo, isPlayer) {
+    if (robo.isSetting) {
+        sense(robo, isPlayer);
+        return;
+    }
     robo.speed = 0;
     robo.statesStack.unshift(sense(robo, isPlayer));
     if (robo.ticks % statesStackCount === statesStackCount - 1) {
@@ -22181,10 +22328,10 @@ function updateRobo(robo, isPlayer) {
 }
 function sense(robo, isPlayer) {
     var _this = this;
-    var aw = p.PI / (sensorNum - 1);
-    var sa = robo.angle - p.HALF_PI - aw;
-    var range = 128;
-    return _.flatten(_.times(sensorNum, function (i) {
+    var aw = robo.spec.sensorAngle / (robo.spec.sensorCount - 1);
+    var sa = robo.angle - robo.spec.sensorAngle / 2 - aw;
+    var range = robo.spec.sensorRange;
+    return _.flatten(_.times(robo.spec.sensorCount, function (i) {
         sa += aw;
         var sensor = new SAT.Polygon(new SAT.Vector(robo.pos.x, robo.pos.y), [new SAT.Vector(),
             new SAT.Vector(range, 0).rotate(sa - aw / 2),
@@ -22206,7 +22353,7 @@ function sense(robo, isPlayer) {
                     }
                 }
             });
-            if (g.hasScreen && isShowingSensor && isPlayer && nd < range) {
+            if (robo.isSetting || (g.hasScreen && isShowingSensor && nd < range)) {
                 var p_1 = robo.game.p;
                 p_1.stroke(['#88f', '#ff8', '#f88'][ti]);
                 p_1.line(Math.cos(sa) * nd + robo.pos.x, Math.sin(sa) * nd + robo.pos.y, robo.pos.x, robo.pos.y);
@@ -55949,321 +56096,6 @@ module.exports = function(module) {
 /* 18 */
 /***/ (function(module, exports) {
 
-var Neuroevolution = function (options) {
-	var self = this;
-	self.options = {
-		activation: function (a) {
-			ap = (-a) / 1;
-			return (1 / (1 + Math.exp(ap)))
-		},
-		randomClamped: function () {
-			return Math.random() * 2 - 1;
-		},
-		population: 50,
-		elitism: 0.2,
-		randomBehaviour: 0.2,
-		mutationRate: 0.1,
-		mutationRange: 0.5,
-		network: [1, [1], 1],
-		historic: 0,
-		lowHistoric: false,
-		scoreSort: -1,
-		nbChild: 1
-	}
-
-	self.set = function (options) {
-		for (var i in options) {
-			if (this.options[i] != undefined) {
-				self.options[i] = options[i];
-			}
-		}
-	}
-
-	self.set(options);
-
-	//NEURON
-	var Neuron = function () {
-		this.value = 0;
-		this.weights = [];
-	}
-	Neuron.prototype.populate = function (nb) {
-		this.weights = [];
-		for (var i = 0; i < nb; i++) {
-			this.weights.push(self.options.randomClamped());
-		}
-	}
-	//LAYER
-	var Layer = function (index) {
-		this.id = index || 0;
-		this.neurons = [];
-	}
-	Layer.prototype.populate = function (nbNeurons, nbInputs) {
-		this.neurons = [];
-		for (var i = 0; i < nbNeurons; i++) {
-			var n = new Neuron();
-			n.populate(nbInputs);
-			this.neurons.push(n);
-		}
-	}
-	//NETWORK
-	var Network = function () {
-		this.layers = [];
-	}
-
-	Network.prototype.perceptronGeneration = function (input, hiddens, output) {
-		var index = 0;
-		var previousNeurons = 0;
-		var layer = new Layer(index);
-		layer.populate(input, previousNeurons);
-		previousNeurons = input;
-		this.layers.push(layer);
-		index++;
-		for (var i in hiddens) {
-			var layer = new Layer(index);
-			layer.populate(hiddens[i], previousNeurons);
-			previousNeurons = hiddens[i];
-			this.layers.push(layer);
-			index++;
-		}
-		var layer = new Layer(index);
-		layer.populate(output, previousNeurons);
-		this.layers.push(layer);
-	}
-
-
-	Network.prototype.getSave = function () {
-		var datas = {
-			neurons: [],
-			weights: []
-		};
-		for (var i in this.layers) {
-			datas.neurons.push(this.layers[i].neurons.length);
-			for (var j in this.layers[i].neurons) {
-				for (var k in this.layers[i].neurons[j].weights) {
-					datas.weights.push(this.layers[i].neurons[j].weights[k]);
-				}
-			}
-		}
-		return datas;
-	}
-
-
-	Network.prototype.setSave = function (save) {
-		var previousNeurons = 0;
-		var index = 0;
-		var indexWeights = 0;
-		this.layers = [];
-		for (var i in save.neurons) {
-			var layer = new Layer(index);
-			layer.populate(save.neurons[i], previousNeurons);
-			for (var j in layer.neurons) {
-				for (var k in layer.neurons[j].weights) {
-					layer.neurons[j].weights[k] = save.weights[indexWeights];
-					indexWeights++;
-				}
-			}
-			previousNeurons = save.neurons[i];
-			index++;
-			this.layers.push(layer);
-		}
-	}
-
-	Network.prototype.compute = function (inputs) {
-		for (var i in inputs) {
-			if (this.layers[0] && this.layers[0].neurons[i]) {
-				this.layers[0].neurons[i].value = inputs[i];
-			}
-		}
-
-		var prevLayer = this.layers[0];
-		for (var i = 1; i < this.layers.length; i++) {
-			for (var j in this.layers[i].neurons) {
-				var sum = 0;
-				for (var k in prevLayer.neurons) {
-					sum += prevLayer.neurons[k].value * this.layers[i].neurons[j].weights[k];
-				}
-				this.layers[i].neurons[j].value = self.options.activation(sum);
-			}
-			prevLayer = this.layers[i];
-		}
-
-		var out = [];
-		var lastLayer = this.layers[this.layers.length - 1];
-		for (var i in lastLayer.neurons) {
-			out.push(lastLayer.neurons[i].value);
-		}
-		return out;
-	}
-	//GENOM
-	var Genome = function (score, network) {
-		this.score = score || 0;
-		this.network = network || null;
-	}
-	//GENERATION
-	var Generation = function () {
-		this.genomes = [];
-	}
-
-	Generation.prototype.addGenome = function (genome) {
-		for (var i = 0; i < this.genomes.length; i++) {
-			if (self.options.scoreSort < 0) {
-				if (genome.score > this.genomes[i].score) {
-					break;
-				}
-			} else {
-				if (genome.score < this.genomes[i].score) {
-					break;
-				}
-			}
-
-		}
-		this.genomes.splice(i, 0, genome);
-	}
-
-	Generation.prototype.breed = function (g1, g2, nbChilds) {
-		var datas = [];
-		for (var nb = 0; nb < nbChilds; nb++) {
-			var data = JSON.parse(JSON.stringify(g1));
-			for (var i in g2.network.weights) {
-				if (Math.random() <= 0.5) {
-					data.network.weights[i] = g2.network.weights[i];
-				}
-			}
-
-			for (var i in data.network.weights) {
-				if (Math.random() <= self.options.mutationRate) {
-					data.network.weights[i] += Math.random() * self.options.mutationRange * 2 - self.options.mutationRange;
-				}
-			}
-			datas.push(data);
-		}
-
-		return datas;
-	}
-
-	Generation.prototype.generateNextGeneration = function () {
-		var nexts = [];
-
-		for (var i = 0; i < Math.round(self.options.elitism * self.options.population); i++) {
-			if (nexts.length < self.options.population) {
-				nexts.push(JSON.parse(JSON.stringify(this.genomes[i].network)));
-			}
-		}
-
-		for (var i = 0; i < Math.round(self.options.randomBehaviour * self.options.population); i++) {
-			var n = JSON.parse(JSON.stringify(this.genomes[0].network));
-			for (var k in n.weights) {
-				n.weights[k] = self.options.randomClamped();
-			}
-			if (nexts.length < self.options.population) {
-				nexts.push(n);
-			}
-		}
-
-		var max = 0;
-		while (true) {
-			for (var i = 0; i < max; i++) {
-				var childs = this.breed(this.genomes[i], this.genomes[max], (self.options.nbChild > 0 ? self.options.nbChild : 1));
-				for (var c in childs) {
-					nexts.push(childs[c].network);
-					if (nexts.length >= self.options.population) {
-						return nexts;
-					}
-				}
-			}
-			max++;
-			if (max >= this.genomes.length - 1) {
-				max = 0;
-			}
-		}
-	}
-	//GENERATIONS
-	var Generations = function () {
-		this.generations = [];
-		var currentGeneration = new Generation();
-	}
-
-	Generations.prototype.firstGeneration = function (input, hiddens, output) {
-		var out = [];
-		for (var i = 0; i < self.options.population; i++) {
-			var nn = new Network();
-			nn.perceptronGeneration(self.options.network[0], self.options.network[1], self.options.network[2]);
-			out.push(nn.getSave());
-		}
-		this.generations.push(new Generation());
-		return out;
-	}
-
-	Generations.prototype.nextGeneration = function () {
-		if (this.generations.length == 0) {
-			return false;
-		}
-
-		var gen = this.generations[this.generations.length - 1].generateNextGeneration();
-		this.generations.push(new Generation());
-		return gen;
-	}
-
-
-	Generations.prototype.addGenome = function (genome) {
-		if (this.generations.length == 0) {
-			return false;
-		}
-
-		return this.generations[this.generations.length - 1].addGenome(genome);
-	}
-
-
-	//SELF METHODS
-	self.generations = new Generations();
-
-	self.restart = function () {
-		self.generations = new Generations();
-	}
-
-	self.nextGeneration = function () {
-		var networks = [];
-		if (self.generations.generations.length == 0) {
-			networks = self.generations.firstGeneration();
-		} else {
-			networks = self.generations.nextGeneration();
-		}
-		var nns = [];
-		for (var i in networks) {
-			var nn = new Network();
-			nn.setSave(networks[i]);
-			nns.push(nn);
-		}
-
-		if (self.options.lowHistoric) {
-			if (self.generations.generations.length >= 2) {
-				var genomes = self.generations.generations[self.generations.generations.length - 2].genomes;
-				for (var i in genomes) {
-					delete genomes[i].network;
-				}
-			}
-		}
-
-		if (self.options.historic != -1) {
-			if (self.generations.generations.length > self.options.historic + 1) {
-				self.generations.generations.splice(0, self.generations.generations.length - (self.options.historic + 1));
-			}
-		}
-		return nns;
-	}
-
-	self.networkScore = function (network, score) {
-		self.generations.addGenome(new Genome(score, network.getSave()));
-	}
-}
-
-module.exports = Neuroevolution;
-
-
-/***/ }),
-/* 19 */
-/***/ (function(module, exports) {
-
 var R = {}; // the Recurrent library
 
 (function (global) {
@@ -57801,7 +57633,7 @@ module.exports = RL;
 
 
 /***/ }),
-/* 20 */
+/* 19 */
 /***/ (function(module, exports, __webpack_require__) {
 
 __webpack_require__(0);
