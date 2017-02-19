@@ -21967,10 +21967,6 @@ var g = __webpack_require__(0);
 var RL = __webpack_require__(18);
 window.onload = init;
 //export let ne;
-var game;
-var targetGame;
-var prevCodes;
-var addActorsCode;
 var p;
 var gameCount = 4;
 var pRoboSpec;
@@ -22147,6 +22143,8 @@ function nextGen(isFirst) {
 }
 var RoboSpec = (function () {
     function RoboSpec() {
+        this.rewardAttack = 1;
+        this.rewardDamage = 1;
         this.sensorAngle = 3;
         this.sensorCount = 7;
         this.sensorRange = 96;
@@ -22317,10 +22315,16 @@ function updateRobo(robo, isPlayer) {
         }
         robo.prevScore = robo.game.score;
         reward = p.constrain(reward, -1, 1);
+        if (reward > 0) {
+            reward *= robo.spec.rewardAttack;
+        }
+        else {
+            reward *= robo.spec.rewardDamage;
+        }
         if (isUsingDqn) {
             robo.agent.learn(reward);
         }
-        if (isShowingReward && isPlayer && reward !== 0) {
+        if (isShowingReward && reward !== 0) {
             var t = new g.Text(robo.game, "" + reward);
             t.pos.set(robo.pos);
         }
@@ -22358,6 +22362,11 @@ function sense(robo, isPlayer) {
                 p_1.stroke(['#88f', '#ff8', '#f88'][ti]);
                 p_1.line(Math.cos(sa) * nd + robo.pos.x, Math.sin(sa) * nd + robo.pos.y, robo.pos.x, robo.pos.y);
                 p_1.noStroke();
+                if (robo.isSetting) {
+                    g.text.draw(robo.game.screen.context, 'REWARD', 5, 10, g.text.Align.left);
+                    g.text.draw(robo.game.screen.context, "ATK " + robo.spec.rewardAttack, 10, 15, g.text.Align.left);
+                    g.text.draw(robo.game.screen.context, "DMG -" + robo.spec.rewardDamage, 10, 20, g.text.Align.left);
+                }
             }
             ti++;
             if (sensorDataCount === 2) {
